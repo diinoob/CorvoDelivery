@@ -57,3 +57,31 @@ if st.sidebar.button("Delivery Reports"):
     
     for entrega in entregas:
         st.write(f"ID: {entrega['id']} | Cliente: {entrega['cliente']} | Status: {entrega['status']}")
+        # Login e Novo Registo
+st.sidebar.title("Autenticação")
+
+# Selecione entre Login ou Novo Registo
+auth_choice = st.sidebar.selectbox("Selecione uma opção:", ["Login", "Novo Registo"])
+
+if auth_choice == "Login":
+    st.header("Login")
+    username = st.text_input("Nome de Utilizador")
+    password = st.text_input("Palavra-passe", type="password")
+    if st.button("Entrar"):
+        # Simulação de validação de login
+        if username == "admin" and password == "1234":
+            st.success(f"Bem-vindo {username}!")
+        else:
+            st.error("Credenciais inválidas. Por favor, tente novamente.")
+
+elif auth_choice == "Novo Registo":
+    st.header("Novo Registo")
+    new_username = st.text_input("Escolha um Nome de Utilizador")
+    new_password = st.text_input("Escolha uma Palavra-passe", type="password")
+    confirm_password = st.text_input("Confirme a Palavra-passe", type="password")
+    if st.button("Registar"):
+        if new_password == confirm_password:
+            st.success("Conta criada com sucesso!")
+            st.write(f"Bem-vindo, {new_username}!")
+        else:
+            st.error("As palavras-passe não coincidem. Por favor, tente novamente.")
