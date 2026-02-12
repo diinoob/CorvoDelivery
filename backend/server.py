@@ -431,35 +431,45 @@ async def register_with_password(register_data: RegisterRequest, response: Respo
 @api_router.get("/users", response_model=List[dict])
 async def list_users(admin: User = Depends(require_admin)):
     """List all users (admin only)"""
-    users = await db.users.find({}, {"_id": 0}).to_list(1000)
+    users = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(1000)
     return users
 
 @api_router.post("/users")
 async def create_user(user_data: UserCreate, admin: User = Depends(require_admin)):
-    """Create a new user (admin only)"""
-    # Check if email exists
+    """Create a new user with password (admin only)"""
+    # Check if email/username exists
     existing = await db.users.find_one({"email": user_data.email})
     if existing:
-        raise HTTPException(status_code=400, detail="Email já registado")
+        raise HTTPException(status_code=400, detail="Utilizador já registado")
+    
+    # Validate password
+    if len(user_data.password) < 4:
+        raise HTTPException(status_code=400, detail="Password deve ter pelo menos 4 caracteres")
     
     user_id = f"user_{uuid.uuid4().hex[:12]}"
+    password_hash = hash_password(user_data.password)
+    
     new_user = {
         "user_id": user_id,
         "email": user_data.email,
         "name": user_data.name,
         "picture": None,
         "role": user_data.role,
+        "password_hash": password_hash,
         "created_at": datetime.now(timezone.utc),
         "is_active": True
     }
     
     await db.users.insert_one(new_user)
-    return {**new_user, "_id": None}
+    
+    # Return without password_hash
+    response_user = {k: v for k, v in new_user.items() if k != "password_hash"}
+    return {**response_user, "_id": None}
 
 @api_router.get("/users/{user_id}")
 async def get_user(user_id: str, admin: User = Depends(require_admin)):
     """Get user by ID (admin only)"""
-    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "password_hash": 0})
     if not user:
         raise HTTPException(status_code=404, detail="Utilizador não encontrado")
     return user
@@ -467,7 +477,17 @@ async def get_user(user_id: str, admin: User = Depends(require_admin)):
 @api_router.patch("/users/{user_id}")
 async def update_user(user_id: str, user_data: UserUpdate, admin: User = Depends(require_admin)):
     """Update user (admin only)"""
-    update_dict = {k: v for k, v in user_data.dict().items() if v is not None}
+    update_dict = {}
+    
+    if user_data.name is not None:
+        update_dict["name"] = user_data.name
+    if user_data.role is not None:
+        update_dict["role"] = user_data.role
+    if user_data.is_active is not None:
+        update_dict["is_active"] = user_data.is_active
+    if user_data.password is not None and len(user_data.password) >= 4:
+        update_dict["password_hash"] = hash_password(user_data.password)
+    
     if not update_dict:
         raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
     
@@ -479,7 +499,7 @@ async def update_user(user_id: str, user_data: UserUpdate, admin: User = Depends
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Utilizador não encontrado")
     
-    updated_user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    updated_user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "password_hash": 0})
     return updated_user
 
 @api_router.delete("/users/{user_id}")
