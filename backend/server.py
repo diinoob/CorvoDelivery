@@ -815,6 +815,15 @@ async def generate_receipt(delivery_id: str, current_user: User = Depends(get_cu
     elements.append(Paragraph(f"Gerado em {datetime.now(timezone.utc).strftime('%d/%m/%Y às %H:%M')} UTC", footer_style))
     
     doc.build(elements)
+    
+    # Clean up temp file after PDF is built
+    if tmp_file_path:
+        import os
+        try:
+            os.unlink(tmp_file_path)
+        except:
+            pass
+    
     output.seek(0)
     
     filename = f"recibo_{delivery.get('tracking_code', delivery_id)}.pdf"
