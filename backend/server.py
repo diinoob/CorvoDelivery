@@ -50,12 +50,14 @@ class User(BaseModel):
 class UserCreate(BaseModel):
     email: str
     name: str
+    password: str
     role: str = "entregador"
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
     role: Optional[str] = None
     is_active: Optional[bool] = None
+    password: Optional[str] = None
 
 class SessionDataResponse(BaseModel):
     id: str
