@@ -4,7 +4,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
 import { User } from '../types';
-import { apiRequest, getApiUrl } from '../utils/api';
+import { apiRequest } from '../utils/api';
 
 interface AuthContextType {
   user: User | null;
@@ -31,16 +31,23 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
+// Helper function to get base URL based on platform
+const getBaseUrl = () => {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+  return process.env.EXPO_PUBLIC_BACKEND_URL || '';
+};
+
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://courier-hub-40.preview.emergentagent.com';
-
   const processSessionId = async (sessionId: string) => {
     try {
       setIsLoading(true);
-      const response = await fetch(`${API_URL}/api/auth/session`, {
+      const baseUrl = getBaseUrl();
+      const response = await fetch(`${baseUrl}/api/auth/session`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -139,8 +146,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setIsLoading(true);
       
-      const redirectUrl = Platform.OS === 'web'
-        ? `${API_URL}/`
+      // For web, use window.location.origin directly
+      const redirectUrl = Platform.OS === 'web' && typeof window !== 'undefined'
+        ? `${window.location.origin}/`
         : Linking.createURL('/');
 
       const authUrl = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
@@ -167,7 +175,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const loginWithPassword = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
       setIsLoading(true);
-      const response = await fetch(`${API_URL}/api/auth/login`, {
+      const baseUrl = getBaseUrl();
+      const response = await fetch(`${baseUrl}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -200,7 +209,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const register = async (email: string, password: string, name: string): Promise<{ success: boolean; error?: string }> => {
     try {
       setIsLoading(true);
-      const response = await fetch(`${API_URL}/api/auth/register`, {
+      const baseUrl = getBaseUrl();
+      const response = await fetch(`${baseUrl}/api/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
