@@ -9,6 +9,9 @@ import {
   TextInput,
   Modal,
   RefreshControl,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,7 +25,12 @@ export default function AdminUsers() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newUser, setNewUser] = useState({ name: '', email: '', role: 'entregador' });
+  const [newUser, setNewUser] = useState({ 
+    name: '', 
+    email: '', 
+    password: '',
+    role: 'entregador' 
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchUsers = async () => {
@@ -49,8 +57,13 @@ export default function AdminUsers() {
   };
 
   const createUser = async () => {
-    if (!newUser.name.trim() || !newUser.email.trim()) {
-      Alert.alert('Erro', 'Preencha todos os campos');
+    if (!newUser.name.trim() || !newUser.email.trim() || !newUser.password.trim()) {
+      Alert.alert('Erro', 'Preencha todos os campos obrigatórios');
+      return;
+    }
+
+    if (newUser.password.length < 4) {
+      Alert.alert('Erro', 'Password deve ter pelo menos 4 caracteres');
       return;
     }
 
@@ -61,9 +74,9 @@ export default function AdminUsers() {
         body: JSON.stringify(newUser),
       });
       setShowAddModal(false);
-      setNewUser({ name: '', email: '', role: 'entregador' });
+      setNewUser({ name: '', email: '', password: '', role: 'entregador' });
       fetchUsers();
-      Alert.alert('Sucesso', 'Utilizador criado');
+      Alert.alert('Sucesso', 'Utilizador criado com sucesso');
     } catch (error: any) {
       Alert.alert('Erro', error.message || 'Não foi possível criar o utilizador');
     } finally {
@@ -125,7 +138,7 @@ export default function AdminUsers() {
         </View>
         <View style={styles.userDetails}>
           <Text style={styles.userName}>{user.name}</Text>
-          <Text style={styles.userEmail}>{user.email}</Text>
+          <Text style={styles.userEmail}>Utilizador: {user.email}</Text>
           <View style={styles.badges}>
             <View
               style={[
@@ -140,6 +153,21 @@ export default function AdminUsers() {
                 ]}
               >
                 {user.is_active ? 'Ativo' : 'Inativo'}
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.badge,
+                { backgroundColor: user.role === 'admin' ? '#ede9fe' : '#e0f2fe' },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.badgeText,
+                  { color: user.role === 'admin' ? '#7c3aed' : '#0891b2' },
+                ]}
+              >
+                {user.role === 'admin' ? 'Admin' : 'Entregador'}
               </Text>
             </View>
           </View>
@@ -214,97 +242,120 @@ export default function AdminUsers() {
         presentationStyle="pageSheet"
         onRequestClose={() => setShowAddModal(false)}
       >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowAddModal(false)}>
-              <Text style={styles.modalCancel}>Cancelar</Text>
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>Novo Utilizador</Text>
-            <TouchableOpacity onPress={createUser} disabled={isSubmitting}>
-              <Text style={[styles.modalSave, isSubmitting && styles.modalSaveDisabled]}>
-                {isSubmitting ? 'A criar...' : 'Criar'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.modalContent}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Nome</Text>
-              <TextInput
-                style={styles.input}
-                value={newUser.name}
-                onChangeText={(text) => setNewUser({ ...newUser, name: text })}
-                placeholder="Nome completo"
-                placeholderTextColor="#94a3b8"
-              />
+        <KeyboardAvoidingView 
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={() => setShowAddModal(false)}>
+                <Text style={styles.modalCancel}>Cancelar</Text>
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>Novo Utilizador</Text>
+              <TouchableOpacity onPress={createUser} disabled={isSubmitting}>
+                <Text style={[styles.modalSave, isSubmitting && styles.modalSaveDisabled]}>
+                  {isSubmitting ? 'A criar...' : 'Criar'}
+                </Text>
+              </TouchableOpacity>
             </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email</Text>
-              <TextInput
-                style={styles.input}
-                value={newUser.email}
-                onChangeText={(text) => setNewUser({ ...newUser, email: text })}
-                placeholder="email@exemplo.com"
-                placeholderTextColor="#94a3b8"
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Função</Text>
-              <View style={styles.roleButtons}>
-                <TouchableOpacity
-                  style={[
-                    styles.roleButton,
-                    newUser.role === 'entregador' && styles.roleButtonActive,
-                  ]}
-                  onPress={() => setNewUser({ ...newUser, role: 'entregador' })}
-                >
-                  <Ionicons
-                    name="bicycle"
-                    size={20}
-                    color={newUser.role === 'entregador' ? '#fff' : '#64748b'}
-                  />
-                  <Text
-                    style={[
-                      styles.roleButtonText,
-                      newUser.role === 'entregador' && styles.roleButtonTextActive,
-                    ]}
-                  >
-                    Entregador
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.roleButton,
-                    newUser.role === 'admin' && styles.roleButtonActive,
-                  ]}
-                  onPress={() => setNewUser({ ...newUser, role: 'admin' })}
-                >
-                  <Ionicons
-                    name="shield"
-                    size={20}
-                    color={newUser.role === 'admin' ? '#fff' : '#64748b'}
-                  />
-                  <Text
-                    style={[
-                      styles.roleButtonText,
-                      newUser.role === 'admin' && styles.roleButtonTextActive,
-                    ]}
-                  >
-                    Administrador
-                  </Text>
-                </TouchableOpacity>
+            <ScrollView style={styles.modalContent} keyboardShouldPersistTaps="handled">
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Nome do Entregador *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newUser.name}
+                  onChangeText={(text) => setNewUser({ ...newUser, name: text })}
+                  placeholder="Nome completo"
+                  placeholderTextColor="#94a3b8"
+                />
               </View>
-            </View>
 
-            <Text style={styles.note}>
-              O utilizador poderá aceder ao sistema após fazer login com Google usando este email.
-            </Text>
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Utilizador (login) *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newUser.email}
+                  onChangeText={(text) => setNewUser({ ...newUser, email: text })}
+                  placeholder="Ex: joao.silva"
+                  placeholderTextColor="#94a3b8"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <Text style={styles.inputHint}>
+                  Este será o nome de utilizador para fazer login
+                </Text>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Password *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newUser.password}
+                  onChangeText={(text) => setNewUser({ ...newUser, password: text })}
+                  placeholder="Mínimo 4 caracteres"
+                  placeholderTextColor="#94a3b8"
+                  secureTextEntry
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Função</Text>
+                <View style={styles.roleButtons}>
+                  <TouchableOpacity
+                    style={[
+                      styles.roleButton,
+                      newUser.role === 'entregador' && styles.roleButtonActive,
+                    ]}
+                    onPress={() => setNewUser({ ...newUser, role: 'entregador' })}
+                  >
+                    <Ionicons
+                      name="bicycle"
+                      size={20}
+                      color={newUser.role === 'entregador' ? '#fff' : '#64748b'}
+                    />
+                    <Text
+                      style={[
+                        styles.roleButtonText,
+                        newUser.role === 'entregador' && styles.roleButtonTextActive,
+                      ]}
+                    >
+                      Entregador
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.roleButton,
+                      newUser.role === 'admin' && styles.roleButtonActive,
+                    ]}
+                    onPress={() => setNewUser({ ...newUser, role: 'admin' })}
+                  >
+                    <Ionicons
+                      name="shield"
+                      size={20}
+                      color={newUser.role === 'admin' ? '#fff' : '#64748b'}
+                    />
+                    <Text
+                      style={[
+                        styles.roleButtonText,
+                        newUser.role === 'admin' && styles.roleButtonTextActive,
+                      ]}
+                    >
+                      Administrador
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.infoBox}>
+                <Ionicons name="information-circle" size={20} color="#3b82f6" />
+                <Text style={styles.infoText}>
+                  O utilizador poderá fazer login com o nome de utilizador e password definidos.
+                </Text>
+              </View>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -459,6 +510,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
+  inputHint: {
+    fontSize: 12,
+    color: '#94a3b8',
+    marginTop: 6,
+  },
   roleButtons: {
     flexDirection: 'row',
     gap: 12,
@@ -487,12 +543,18 @@ const styles = StyleSheet.create({
   roleButtonTextActive: {
     color: '#fff',
   },
-  note: {
-    fontSize: 13,
-    color: '#64748b',
-    backgroundColor: '#f1f5f9',
+  infoBox: {
+    flexDirection: 'row',
+    backgroundColor: '#eff6ff',
     padding: 12,
     borderRadius: 8,
+    gap: 8,
+    alignItems: 'flex-start',
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#1e40af',
     lineHeight: 18,
   },
 });
