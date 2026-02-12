@@ -753,6 +753,7 @@ async def generate_receipt(delivery_id: str, current_user: User = Depends(get_cu
     elements.append(Paragraph("Assinatura Digital do Cliente", heading_style))
     
     signature_data = delivery.get('signature')
+    tmp_file_path = None
     if signature_data:
         try:
             # Handle base64 signature
@@ -764,17 +765,14 @@ async def generate_receipt(delivery_id: str, current_user: User = Depends(get_cu
             
             # Decode and save to temp file
             signature_bytes = base64.b64decode(signature_base64)
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp_file:
-                tmp_file.write(signature_bytes)
-                tmp_file_path = tmp_file.name
+            tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+            tmp_file.write(signature_bytes)
+            tmp_file.close()
+            tmp_file_path = tmp_file.name
             
             # Add signature image
             sig_img = RLImage(tmp_file_path, width=10*cm, height=3*cm)
             elements.append(sig_img)
-            
-            # Clean up temp file
-            import os
-            os.unlink(tmp_file_path)
         except Exception as e:
             logger.error(f"Error processing signature: {e}")
             elements.append(Paragraph("Assinatura registada (erro ao processar imagem)", styles['Normal']))
