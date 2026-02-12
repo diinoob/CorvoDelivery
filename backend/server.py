@@ -300,6 +300,130 @@ async def logout(request: Request, response: Response):
     response.delete_cookie(key="session_token", path="/")
     return {"success": True, "message": "Sessão terminada"}
 
+@api_router.post("/auth/login")
+async def login_with_password(login_data: LoginRequest, response: Response):
+    """Login with email and password"""
+    # Find user by email
+    user_doc = await db.users.find_one(
+        {"email": login_data.email},
+        {"_id": 0}
+    )
+    
+    if not user_doc:
+        raise HTTPException(status_code=401, detail="Email ou password incorretos")
+    
+    # Check if user has password set
+    if not user_doc.get("password_hash"):
+        raise HTTPException(status_code=401, detail="Esta conta usa login com Google")
+    
+    # Verify password
+    if not verify_password(login_data.password, user_doc["password_hash"]):
+        raise HTTPException(status_code=401, detail="Email ou password incorretos")
+    
+    # Check if active
+    if not user_doc.get("is_active", True):
+        raise HTTPException(status_code=403, detail="Conta desativada")
+    
+    # Create session
+    session_token = generate_session_token()
+    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+    
+    session_doc = {
+        "user_id": user_doc["user_id"],
+        "session_token": session_token,
+        "expires_at": expires_at,
+        "created_at": datetime.now(timezone.utc)
+    }
+    
+    # Remove old sessions for this user
+    await db.user_sessions.delete_many({"user_id": user_doc["user_id"]})
+    await db.user_sessions.insert_one(session_doc)
+    
+    # Set cookie
+    response.set_cookie(
+        key="session_token",
+        value=session_token,
+        httponly=True,
+        secure=True,
+        samesite="none",
+        path="/",
+        max_age=7 * 24 * 60 * 60
+    )
+    
+    # Remove password_hash from response
+    user_response = {k: v for k, v in user_doc.items() if k != "password_hash"}
+    
+    return {
+        "success": True,
+        "user": user_response,
+        "session_token": session_token
+    }
+
+@api_router.post("/auth/register")
+async def register_with_password(register_data: RegisterRequest, response: Response):
+    """Register new user with email and password"""
+    # Check if email exists
+    existing = await db.users.find_one({"email": register_data.email})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email já registado")
+    
+    # Check password strength
+    if len(register_data.password) < 4:
+        raise HTTPException(status_code=400, detail="Password deve ter pelo menos 4 caracteres")
+    
+    # First user becomes admin
+    user_count = await db.users.count_documents({})
+    role = "admin" if user_count == 0 else "entregador"
+    
+    user_id = f"user_{uuid.uuid4().hex[:12]}"
+    password_hash = hash_password(register_data.password)
+    
+    new_user = {
+        "user_id": user_id,
+        "email": register_data.email,
+        "name": register_data.name,
+        "picture": None,
+        "role": role,
+        "password_hash": password_hash,
+        "created_at": datetime.now(timezone.utc),
+        "is_active": True
+    }
+    
+    await db.users.insert_one(new_user)
+    
+    # Create session
+    session_token = generate_session_token()
+    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+    
+    session_doc = {
+        "user_id": user_id,
+        "session_token": session_token,
+        "expires_at": expires_at,
+        "created_at": datetime.now(timezone.utc)
+    }
+    
+    await db.user_sessions.insert_one(session_doc)
+    
+    # Set cookie
+    response.set_cookie(
+        key="session_token",
+        value=session_token,
+        httponly=True,
+        secure=True,
+        samesite="none",
+        path="/",
+        max_age=7 * 24 * 60 * 60
+    )
+    
+    # Remove password_hash from response
+    user_response = {k: v for k, v in new_user.items() if k != "password_hash"}
+    
+    return {
+        "success": True,
+        "user": user_response,
+        "session_token": session_token
+    }
+
 # ==================== USER MANAGEMENT (Admin only) ====================
 
 @api_router.get("/users", response_model=List[dict])
