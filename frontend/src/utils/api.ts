@@ -1,9 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://courier-hub-40.preview.emergentagent.com';
+const getBaseUrl = () => {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+  return process.env.EXPO_PUBLIC_BACKEND_URL || '';
+};
 
-export const getApiUrl = () => `${API_URL}/api`;
+export const getApiUrl = () => `${getBaseUrl()}/api`;
 
 export const getAuthHeaders = async () => {
   const token = await AsyncStorage.getItem('session_token');
