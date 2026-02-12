@@ -627,6 +627,206 @@ async def delete_delivery(delivery_id: str, admin: User = Depends(require_admin)
         raise HTTPException(status_code=404, detail="Entrega não encontrada")
     return {"success": True, "message": "Entrega eliminada"}
 
+@api_router.get("/deliveries/{delivery_id}/receipt")
+async def generate_receipt(delivery_id: str, current_user: User = Depends(get_current_user)):
+    """Generate PDF receipt for a delivery"""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import cm
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+    import base64
+    import tempfile
+    
+    delivery = await db.deliveries.find_one({"delivery_id": delivery_id}, {"_id": 0})
+    
+    if not delivery:
+        raise HTTPException(status_code=404, detail="Entrega não encontrada")
+    
+    # Check access
+    if current_user.role != "admin" and delivery["entregador_id"] != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+    
+    # Create PDF
+    output = BytesIO()
+    doc = SimpleDocTemplate(output, pagesize=A4, topMargin=2*cm, bottomMargin=2*cm, leftMargin=2*cm, rightMargin=2*cm)
+    elements = []
+    
+    styles = getSampleStyleSheet()
+    
+    # Custom styles
+    title_style = ParagraphStyle(
+        'ReceiptTitle',
+        parent=styles['Heading1'],
+        fontSize=24,
+        alignment=TA_CENTER,
+        spaceAfter=10,
+        textColor=colors.HexColor('#1a365d')
+    )
+    
+    subtitle_style = ParagraphStyle(
+        'ReceiptSubtitle',
+        parent=styles['Normal'],
+        fontSize=12,
+        alignment=TA_CENTER,
+        spaceAfter=30,
+        textColor=colors.HexColor('#64748b')
+    )
+    
+    heading_style = ParagraphStyle(
+        'SectionHeading',
+        parent=styles['Heading2'],
+        fontSize=14,
+        spaceBefore=20,
+        spaceAfter=10,
+        textColor=colors.HexColor('#1a365d')
+    )
+    
+    # Header
+    elements.append(Paragraph("INTERCOURIER CORVO", title_style))
+    elements.append(Paragraph("Comprovativo de Entrega", subtitle_style))
+    
+    # Tracking code box
+    tracking_data = [[Paragraph(f"<b>Código de Rastreamento</b>", styles['Normal']), 
+                      Paragraph(f"<b>{delivery.get('tracking_code', 'N/A')}</b>", styles['Normal'])]]
+    tracking_table = Table(tracking_data, colWidths=[8*cm, 8*cm])
+    tracking_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f1f5f9')),
+        ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#e2e8f0')),
+        ('PADDING', (0, 0), (-1, -1), 12),
+        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+    ]))
+    elements.append(tracking_table)
+    elements.append(Spacer(1, 0.5*cm))
+    
+    # Delivery details
+    elements.append(Paragraph("Detalhes da Entrega", heading_style))
+    
+    # Format dates
+    delivered_at = delivery.get('delivered_at')
+    if delivered_at:
+        if hasattr(delivered_at, 'strftime'):
+            delivery_date = delivered_at.strftime('%d/%m/%Y')
+            delivery_time = delivered_at.strftime('%H:%M')
+        else:
+            delivery_date = str(delivered_at)[:10]
+            delivery_time = str(delivered_at)[11:16] if len(str(delivered_at)) > 16 else 'N/A'
+    else:
+        now = datetime.now(timezone.utc)
+        delivery_date = now.strftime('%d/%m/%Y')
+        delivery_time = now.strftime('%H:%M')
+    
+    created_at = delivery.get('created_at')
+    if created_at and hasattr(created_at, 'strftime'):
+        created_date = created_at.strftime('%d/%m/%Y às %H:%M')
+    else:
+        created_date = str(created_at)[:16] if created_at else 'N/A'
+    
+    details_data = [
+        ['Data de Entrega:', delivery_date],
+        ['Hora de Entrega:', delivery_time],
+        ['Data de Registo:', created_date],
+        ['Cliente:', delivery.get('client_name', 'N/A')],
+        ['Morada:', delivery.get('address', 'N/A')],
+        ['Entregador:', delivery.get('entregador_name', 'N/A')],
+    ]
+    
+    if delivery.get('client_email'):
+        details_data.append(['Email:', delivery.get('client_email')])
+    
+    if delivery.get('notes'):
+        details_data.append(['Observações:', delivery.get('notes')])
+    
+    details_table = Table(details_data, colWidths=[5*cm, 11*cm])
+    details_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#64748b')),
+        ('TEXTCOLOR', (1, 0), (1, -1), colors.HexColor('#1e293b')),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ('TOPPADDING', (0, 0), (-1, -1), 8),
+        ('LINEBELOW', (0, 0), (-1, -2), 0.5, colors.HexColor('#e2e8f0')),
+    ]))
+    elements.append(details_table)
+    
+    # Signature section
+    elements.append(Paragraph("Assinatura Digital do Cliente", heading_style))
+    
+    signature_data = delivery.get('signature')
+    if signature_data:
+        try:
+            # Handle base64 signature
+            if signature_data.startswith('data:'):
+                # Remove data URL prefix
+                signature_base64 = signature_data.split(',')[1]
+            else:
+                signature_base64 = signature_data
+            
+            # Decode and save to temp file
+            signature_bytes = base64.b64decode(signature_base64)
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp_file:
+                tmp_file.write(signature_bytes)
+                tmp_file_path = tmp_file.name
+            
+            # Add signature image
+            sig_img = RLImage(tmp_file_path, width=10*cm, height=3*cm)
+            elements.append(sig_img)
+            
+            # Clean up temp file
+            import os
+            os.unlink(tmp_file_path)
+        except Exception as e:
+            logger.error(f"Error processing signature: {e}")
+            elements.append(Paragraph("Assinatura registada (erro ao processar imagem)", styles['Normal']))
+    else:
+        elements.append(Paragraph("Sem assinatura digital registada", styles['Normal']))
+    
+    elements.append(Spacer(1, 1*cm))
+    
+    # Footer with status
+    status_pt = {
+        "pendente": "Pendente",
+        "em_transito": "Em Trânsito",
+        "entregue": "Entregue",
+        "falhou": "Falhou"
+    }
+    
+    status_colors = {
+        "pendente": colors.HexColor('#f59e0b'),
+        "em_transito": colors.HexColor('#3b82f6'),
+        "entregue": colors.HexColor('#10b981'),
+        "falhou": colors.HexColor('#ef4444')
+    }
+    
+    status = delivery.get('status', 'pendente')
+    status_label = status_pt.get(status, status)
+    status_color = status_colors.get(status, colors.black)
+    
+    footer_style = ParagraphStyle(
+        'Footer',
+        parent=styles['Normal'],
+        fontSize=10,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor('#94a3b8')
+    )
+    
+    elements.append(Spacer(1, 1*cm))
+    elements.append(Paragraph(f"Estado: {status_label}", ParagraphStyle('Status', parent=styles['Normal'], alignment=TA_CENTER, fontSize=14, textColor=status_color)))
+    elements.append(Spacer(1, 0.5*cm))
+    elements.append(Paragraph("Este documento serve como comprovativo de entrega.", footer_style))
+    elements.append(Paragraph(f"Gerado em {datetime.now(timezone.utc).strftime('%d/%m/%Y às %H:%M')} UTC", footer_style))
+    
+    doc.build(elements)
+    output.seek(0)
+    
+    filename = f"recibo_{delivery.get('tracking_code', delivery_id)}.pdf"
+    
+    return StreamingResponse(
+        output,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
 @api_router.post("/deliveries/bulk-status")
 async def bulk_update_status(
     data: BulkStatusUpdate,
