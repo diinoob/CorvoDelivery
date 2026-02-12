@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { apiRequest } from '../../src/utils/api';
+import { SignaturePad } from '../../src/components/SignaturePad';
 
 export default function NewDelivery() {
   const router = useRouter();
@@ -27,8 +28,9 @@ export default function NewDelivery() {
   });
   const [photo, setPhoto] = useState<string | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
+  const [showSignaturePad, setShowSignaturePad] = useState(false);
 
-  const pickImage = async (type: 'photo' | 'signature', source: 'camera' | 'gallery') => {
+  const pickImage = async (source: 'camera' | 'gallery') => {
     try {
       let result;
 
@@ -41,7 +43,7 @@ export default function NewDelivery() {
         result = await ImagePicker.launchCameraAsync({
           mediaTypes: ['images'],
           allowsEditing: true,
-          aspect: type === 'signature' ? [3, 1] : [4, 3],
+          aspect: [4, 3],
           quality: 0.7,
           base64: true,
         });
@@ -54,7 +56,7 @@ export default function NewDelivery() {
         result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ['images'],
           allowsEditing: true,
-          aspect: type === 'signature' ? [3, 1] : [4, 3],
+          aspect: [4, 3],
           quality: 0.7,
           base64: true,
         });
@@ -62,11 +64,7 @@ export default function NewDelivery() {
 
       if (!result.canceled && result.assets[0].base64) {
         const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
-        if (type === 'photo') {
-          setPhoto(base64Image);
-        } else {
-          setSignature(base64Image);
-        }
+        setPhoto(base64Image);
       }
     } catch (error) {
       console.error('Error picking image:', error);
@@ -74,14 +72,14 @@ export default function NewDelivery() {
     }
   };
 
-  const showImageOptions = (type: 'photo' | 'signature') => {
+  const showImageOptions = () => {
     Alert.alert(
-      type === 'photo' ? 'Fotografia' : 'Assinatura',
+      'Fotografia',
       'Escolha uma opção',
       [
         { text: 'Cancelar', style: 'cancel' },
-        { text: 'Câmara', onPress: () => pickImage(type, 'camera') },
-        { text: 'Galeria', onPress: () => pickImage(type, 'gallery') },
+        { text: 'Câmara', onPress: () => pickImage('camera') },
+        { text: 'Galeria', onPress: () => pickImage('gallery') },
       ]
     );
   };
@@ -197,7 +195,7 @@ export default function NewDelivery() {
             ) : (
               <TouchableOpacity
                 style={styles.attachButton}
-                onPress={() => showImageOptions('photo')}
+                onPress={showImageOptions}
               >
                 <Ionicons name="camera-outline" size={32} color="#64748b" />
                 <Text style={styles.attachText}>Adicionar fotografia</Text>
@@ -205,26 +203,37 @@ export default function NewDelivery() {
             )}
           </View>
 
-          {/* Signature */}
+          {/* Digital Signature */}
           <View style={styles.attachmentGroup}>
-            <Text style={styles.label}>Assinatura do Cliente</Text>
+            <Text style={styles.label}>Assinatura Digital do Cliente</Text>
             {signature ? (
-              <View style={styles.imagePreview}>
+              <View style={styles.signaturePreview}>
                 <Image source={{ uri: signature }} style={styles.signatureImage} />
-                <TouchableOpacity
-                  style={styles.removeButton}
-                  onPress={() => setSignature(null)}
-                >
-                  <Ionicons name="close" size={20} color="#fff" />
-                </TouchableOpacity>
+                <View style={styles.signatureActions}>
+                  <TouchableOpacity
+                    style={styles.changeButton}
+                    onPress={() => setShowSignaturePad(true)}
+                  >
+                    <Ionicons name="create-outline" size={16} color="#3b82f6" />
+                    <Text style={styles.changeButtonText}>Alterar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.removeSignatureButton}
+                    onPress={() => setSignature(null)}
+                  >
+                    <Ionicons name="trash-outline" size={16} color="#ef4444" />
+                    <Text style={styles.removeSignatureText}>Remover</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             ) : (
               <TouchableOpacity
-                style={styles.attachButton}
-                onPress={() => showImageOptions('signature')}
+                style={styles.signatureButton}
+                onPress={() => setShowSignaturePad(true)}
               >
-                <Ionicons name="pencil-outline" size={32} color="#64748b" />
-                <Text style={styles.attachText}>Adicionar assinatura</Text>
+                <Ionicons name="finger-print" size={32} color="#64748b" />
+                <Text style={styles.attachText}>Recolher assinatura digital</Text>
+                <Text style={styles.attachSubtext}>Toque para o cliente assinar</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -244,6 +253,13 @@ export default function NewDelivery() {
 
         <View style={{ height: 32 }} />
       </ScrollView>
+
+      {/* Signature Pad Modal */}
+      <SignaturePad
+        visible={showSignaturePad}
+        onClose={() => setShowSignaturePad(false)}
+        onSave={(sig) => setSignature(sig)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -297,10 +313,24 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     borderColor: '#e2e8f0',
   },
+  signatureButton: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#3b82f6',
+  },
   attachText: {
     fontSize: 14,
     color: '#64748b',
     marginTop: 8,
+  },
+  attachSubtext: {
+    fontSize: 12,
+    color: '#94a3b8',
+    marginTop: 4,
   },
   imagePreview: {
     position: 'relative',
@@ -312,11 +342,42 @@ const styles = StyleSheet.create({
     height: 200,
     borderRadius: 12,
   },
+  signaturePreview: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+  },
   signatureImage: {
     width: '100%',
     height: 100,
-    borderRadius: 12,
-    backgroundColor: '#fff',
+    borderRadius: 8,
+    backgroundColor: '#f8fafc',
+  },
+  signatureActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 12,
+    gap: 24,
+  },
+  changeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  changeButtonText: {
+    fontSize: 14,
+    color: '#3b82f6',
+    fontWeight: '500',
+  },
+  removeSignatureButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  removeSignatureText: {
+    fontSize: 14,
+    color: '#ef4444',
+    fontWeight: '500',
   },
   removeButton: {
     position: 'absolute',
