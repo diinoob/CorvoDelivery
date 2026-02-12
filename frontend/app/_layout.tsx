@@ -29,6 +29,15 @@ export default function RootLayout() {
           }} 
         />
         <Stack.Screen 
+          name="delivery/pickup" 
+          options={{ 
+            headerShown: true,
+            headerTitle: 'Picar Entrega',
+            headerTintColor: '#1a365d',
+            headerStyle: { backgroundColor: '#f8fafc' },
+          }} 
+        />
+        <Stack.Screen 
           name="admin/users" 
           options={{ 
             headerShown: true,
