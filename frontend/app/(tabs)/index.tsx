@@ -67,12 +67,22 @@ export default function Dashboard() {
       <View style={styles.quickActions}>
         <TouchableOpacity
           style={styles.actionButton}
+          onPress={() => router.push('/delivery/pickup')}
+        >
+          <View style={[styles.actionIcon, { backgroundColor: '#fef3c7' }]}>
+            <Ionicons name="scan" size={24} color="#f59e0b" />
+          </View>
+          <Text style={styles.actionText}>Picar</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.actionButton}
           onPress={() => router.push('/delivery/new')}
         >
           <View style={[styles.actionIcon, { backgroundColor: '#dbeafe' }]}>
             <Ionicons name="add" size={24} color="#3b82f6" />
           </View>
-          <Text style={styles.actionText}>Nova Entrega</Text>
+          <Text style={styles.actionText}>Nova</Text>
         </TouchableOpacity>
 
         {isAdmin && (
@@ -80,8 +90,8 @@ export default function Dashboard() {
             style={styles.actionButton}
             onPress={() => router.push('/admin/users')}
           >
-            <View style={[styles.actionIcon, { backgroundColor: '#fef3c7' }]}>
-              <Ionicons name="people" size={24} color="#f59e0b" />
+            <View style={[styles.actionIcon, { backgroundColor: '#e0e7ff' }]}>
+              <Ionicons name="people" size={24} color="#6366f1" />
             </View>
             <Text style={styles.actionText}>Utilizadores</Text>
           </TouchableOpacity>
