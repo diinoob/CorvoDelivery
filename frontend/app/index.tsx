@@ -16,13 +16,10 @@ import { useAuth } from '../src/contexts/AuthContext';
 import { LoadingScreen } from '../src/components/LoadingScreen';
 
 export default function Index() {
-  const { user, isLoading, isAuthenticated, login, loginWithPassword, register } = useAuth();
+  const { user, isLoading, isAuthenticated, loginWithPassword } = useAuth();
   const router = useRouter();
-  const [showPasswordLogin, setShowPasswordLogin] = useState(false);
-  const [isRegistering, setIsRegistering] = useState(false);
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   React.useEffect(() => {
@@ -31,33 +28,18 @@ export default function Index() {
     }
   }, [isAuthenticated, isLoading]);
 
-  const handlePasswordLogin = async () => {
-    if (!email.trim() || !password.trim()) {
-      Alert.alert('Erro', 'Preencha email e password');
+  const handleLogin = async () => {
+    if (!username.trim() || !password.trim()) {
+      Alert.alert('Erro', 'Preencha utilizador e password');
       return;
     }
 
     setSubmitting(true);
-    const result = await loginWithPassword(email.trim(), password);
+    const result = await loginWithPassword(username.trim(), password);
     setSubmitting(false);
 
     if (!result.success) {
       Alert.alert('Erro', result.error || 'Erro ao fazer login');
-    }
-  };
-
-  const handleRegister = async () => {
-    if (!email.trim() || !password.trim() || !name.trim()) {
-      Alert.alert('Erro', 'Preencha todos os campos');
-      return;
-    }
-
-    setSubmitting(true);
-    const result = await register(email.trim(), password, name.trim());
-    setSubmitting(false);
-
-    if (!result.success) {
-      Alert.alert('Erro', result.error || 'Erro ao registar');
     }
   };
 
@@ -87,145 +69,68 @@ export default function Index() {
           <Text style={styles.subtitle}>Gestão de Entregas</Text>
         </View>
 
-        {!showPasswordLogin ? (
-          <>
-            <View style={styles.features}>
-              <View style={styles.featureItem}>
-                <Ionicons name="location" size={24} color="#3b82f6" />
-                <Text style={styles.featureText}>Rastreamento em tempo real</Text>
-              </View>
-              <View style={styles.featureItem}>
-                <Ionicons name="camera" size={24} color="#10b981" />
-                <Text style={styles.featureText}>Prova de entrega com foto</Text>
-              </View>
-              <View style={styles.featureItem}>
-                <Ionicons name="document-text" size={24} color="#f59e0b" />
-                <Text style={styles.featureText}>Relatórios automáticos</Text>
-              </View>
-            </View>
-
-            <View style={styles.footer}>
-              <TouchableOpacity style={styles.loginButton} onPress={login}>
-                <Ionicons name="logo-google" size={20} color="#fff" />
-                <Text style={styles.loginButtonText}>Entrar com Google</Text>
-              </TouchableOpacity>
-
-              <View style={styles.divider}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>ou</Text>
-                <View style={styles.dividerLine} />
-              </View>
-
-              <TouchableOpacity 
-                style={styles.passwordLoginButton} 
-                onPress={() => setShowPasswordLogin(true)}
-              >
-                <Ionicons name="mail-outline" size={20} color="#1a365d" />
-                <Text style={styles.passwordLoginButtonText}>Entrar com Email</Text>
-              </TouchableOpacity>
-
-              <Text style={styles.disclaimer}>
-                Ao continuar, concorda com os termos de serviço
-              </Text>
-            </View>
-          </>
-        ) : (
-          <View style={styles.loginForm}>
-            <Text style={styles.formTitle}>
-              {isRegistering ? 'Criar Conta' : 'Entrar'}
-            </Text>
-
-            {isRegistering && (
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Nome</Text>
-                <TextInput
-                  style={styles.input}
-                  value={name}
-                  onChangeText={setName}
-                  placeholder="Nome completo"
-                  placeholderTextColor="#94a3b8"
-                  autoCapitalize="words"
-                />
-              </View>
-            )}
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email</Text>
+        <View style={styles.loginForm}>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Utilizador</Text>
+            <View style={styles.inputContainer}>
+              <Ionicons name="person-outline" size={20} color="#64748b" />
               <TextInput
                 style={styles.input}
-                value={email}
-                onChangeText={setEmail}
-                placeholder="Email ou utilizador"
+                value={username}
+                onChangeText={setUsername}
+                placeholder="Introduza o utilizador"
                 placeholderTextColor="#94a3b8"
-                keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
               />
             </View>
+          </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Password</Text>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Password</Text>
+            <View style={styles.inputContainer}>
+              <Ionicons name="lock-closed-outline" size={20} color="#64748b" />
               <TextInput
                 style={styles.input}
                 value={password}
                 onChangeText={setPassword}
-                placeholder="Password"
+                placeholder="Introduza a password"
                 placeholderTextColor="#94a3b8"
                 secureTextEntry
               />
             </View>
-
-            <TouchableOpacity 
-              style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
-              onPress={isRegistering ? handleRegister : handlePasswordLogin}
-              disabled={submitting}
-            >
-              <Text style={styles.submitButtonText}>
-                {submitting 
-                  ? 'A processar...' 
-                  : (isRegistering ? 'Criar Conta' : 'Entrar')
-                }
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.switchModeButton}
-              onPress={() => setIsRegistering(!isRegistering)}
-            >
-              <Text style={styles.switchModeText}>
-                {isRegistering 
-                  ? 'Já tem conta? Entrar' 
-                  : 'Não tem conta? Registar'
-                }
-              </Text>
-            </TouchableOpacity>
-
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>ou</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            <TouchableOpacity style={styles.googleButton} onPress={login}>
-              <Ionicons name="logo-google" size={20} color="#1a365d" />
-              <Text style={styles.googleButtonText}>Continuar com Google</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.backButton}
-              onPress={() => {
-                setShowPasswordLogin(false);
-                setIsRegistering(false);
-                setEmail('');
-                setPassword('');
-                setName('');
-              }}
-            >
-              <Ionicons name="arrow-back" size={20} color="#64748b" />
-              <Text style={styles.backButtonText}>Voltar</Text>
-            </TouchableOpacity>
           </View>
-        )}
+
+          <TouchableOpacity 
+            style={[styles.loginButton, submitting && styles.loginButtonDisabled]}
+            onPress={handleLogin}
+            disabled={submitting}
+          >
+            <Text style={styles.loginButtonText}>
+              {submitting ? 'A entrar...' : 'Entrar'}
+            </Text>
+            {!submitting && <Ionicons name="arrow-forward" size={20} color="#fff" />}
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.features}>
+          <View style={styles.featureItem}>
+            <Ionicons name="location" size={20} color="#3b82f6" />
+            <Text style={styles.featureText}>Rastreamento</Text>
+          </View>
+          <View style={styles.featureItem}>
+            <Ionicons name="camera" size={20} color="#10b981" />
+            <Text style={styles.featureText}>Foto & Assinatura</Text>
+          </View>
+          <View style={styles.featureItem}>
+            <Ionicons name="document-text" size={20} color="#f59e0b" />
+            <Text style={styles.featureText}>Relatórios</Text>
+          </View>
+        </View>
+
+        <Text style={styles.footer}>
+          Contacte o administrador para obter credenciais de acesso
+        </Text>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -239,116 +144,33 @@ const styles = StyleSheet.create({
   contentContainer: {
     flexGrow: 1,
     padding: 24,
+    justifyContent: 'center',
   },
   header: {
     alignItems: 'center',
-    paddingTop: 40,
-    paddingBottom: 24,
+    marginBottom: 32,
   },
   logoContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 30,
+    width: 100,
+    height: 100,
+    borderRadius: 25,
     backgroundColor: '#e0e7ff',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 16,
   },
   title: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '700',
     color: '#1a365d',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#64748b',
   },
-  features: {
-    paddingVertical: 24,
-  },
-  featureItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  featureText: {
-    marginLeft: 12,
-    fontSize: 15,
-    color: '#334155',
-    fontWeight: '500',
-  },
-  footer: {
-    paddingBottom: 32,
-  },
-  loginButton: {
-    backgroundColor: '#1a365d',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    borderRadius: 12,
-    gap: 12,
-  },
-  loginButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 20,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#e2e8f0',
-  },
-  dividerText: {
-    marginHorizontal: 16,
-    color: '#94a3b8',
-    fontSize: 14,
-  },
-  passwordLoginButton: {
-    backgroundColor: '#fff',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    borderRadius: 12,
-    gap: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  passwordLoginButtonText: {
-    color: '#1a365d',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  disclaimer: {
-    textAlign: 'center',
-    marginTop: 16,
-    fontSize: 12,
-    color: '#94a3b8',
-  },
   loginForm: {
-    flex: 1,
-  },
-  formTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1a365d',
-    marginBottom: 24,
-    textAlign: 'center',
+    marginBottom: 32,
   },
   inputGroup: {
     marginBottom: 16,
@@ -359,65 +181,56 @@ const styles = StyleSheet.create({
     color: '#334155',
     marginBottom: 8,
   },
-  input: {
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: '#1e293b',
+    paddingHorizontal: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
+    gap: 12,
   },
-  submitButton: {
+  input: {
+    flex: 1,
+    fontSize: 16,
+    color: '#1e293b',
+    paddingVertical: 16,
+  },
+  loginButton: {
     backgroundColor: '#1a365d',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     padding: 16,
     borderRadius: 12,
-    alignItems: 'center',
+    gap: 8,
     marginTop: 8,
   },
-  submitButtonDisabled: {
+  loginButtonDisabled: {
     opacity: 0.6,
   },
-  submitButtonText: {
+  loginButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
   },
-  switchModeButton: {
-    padding: 12,
-    alignItems: 'center',
-  },
-  switchModeText: {
-    color: '#3b82f6',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  googleButton: {
-    backgroundColor: '#fff',
+  features: {
     flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 24,
+  },
+  featureItem: {
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    borderRadius: 12,
-    gap: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    gap: 6,
   },
-  googleButtonText: {
-    color: '#1a365d',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 12,
-    marginTop: 8,
-    gap: 8,
-  },
-  backButtonText: {
+  featureText: {
+    fontSize: 12,
     color: '#64748b',
-    fontSize: 14,
+  },
+  footer: {
+    textAlign: 'center',
+    fontSize: 12,
+    color: '#94a3b8',
   },
 });
