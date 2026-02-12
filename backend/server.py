@@ -111,6 +111,32 @@ class DailyReport(BaseModel):
     entregador_stats: List[dict]
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+# ==================== PASSWORD AUTH MODELS ====================
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+    name: str
+
+# ==================== PASSWORD HELPERS ====================
+
+def hash_password(password: str) -> str:
+    """Hash password using SHA-256 with salt"""
+    salt = "intercourier_corvo_salt_2024"
+    return hashlib.sha256(f"{password}{salt}".encode()).hexdigest()
+
+def verify_password(password: str, hashed: str) -> bool:
+    """Verify password against hash"""
+    return hash_password(password) == hashed
+
+def generate_session_token() -> str:
+    """Generate a secure session token"""
+    return secrets.token_hex(32)
+
 # ==================== AUTH HELPERS ====================
 
 async def get_session_token(request: Request) -> Optional[str]:
