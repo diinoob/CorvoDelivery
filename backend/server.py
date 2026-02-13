@@ -107,6 +107,10 @@ class BulkStatusUpdate(BaseModel):
     delivery_ids: List[str]
     status: str
 
+class DeliveryAssignment(BaseModel):
+    delivery_ids: List[str]
+    entregador_id: str
+
 class DailyReport(BaseModel):
     report_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     date: str
