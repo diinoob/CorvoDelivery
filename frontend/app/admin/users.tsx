@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Clipboard,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,14 +20,25 @@ import { LoadingScreen } from '../../src/components/LoadingScreen';
 import { apiRequest } from '../../src/utils/api';
 import { User } from '../../src/types';
 
+interface CreatedUserCredentials {
+  name: string;
+  username: string;
+  password: string;
+  email: string;
+  role: string;
+}
+
 export default function AdminUsers() {
   const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showCredentialsModal, setShowCredentialsModal] = useState(false);
+  const [createdCredentials, setCreatedCredentials] = useState<CreatedUserCredentials | null>(null);
   const [newUser, setNewUser] = useState({ 
     name: '', 
+    username: '',
     email: '', 
     password: '',
     role: 'entregador' 
