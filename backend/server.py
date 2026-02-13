@@ -922,6 +922,78 @@ async def bulk_update_status(
         "updated_count": result.modified_count
     }
 
+@api_router.post("/deliveries/assign")
+async def assign_deliveries(
+    data: DeliveryAssignment,
+    admin: User = Depends(require_admin)
+):
+    """Assign deliveries to a specific entregador (admin only)"""
+    # Verify entregador exists and is active
+    entregador = await db.users.find_one({
+        "user_id": data.entregador_id,
+        "role": "entregador",
+        "is_active": True
+    })
+    
+    if not entregador:
+        raise HTTPException(status_code=404, detail="Entregador não encontrado ou inativo")
+    
+    # Update deliveries
+    update_data = {
+        "entregador_id": data.entregador_id,
+        "entregador_name": entregador["name"],
+        "updated_at": datetime.now(timezone.utc)
+    }
+    
+    result = await db.deliveries.update_many(
+        {"delivery_id": {"$in": data.delivery_ids}},
+        {"$set": update_data}
+    )
+    
+    return {
+        "success": True,
+        "updated_count": result.modified_count,
+        "entregador_name": entregador["name"]
+    }
+
+@api_router.get("/deliveries/unassigned")
+async def get_unassigned_deliveries(admin: User = Depends(require_admin)):
+    """Get all pending deliveries that can be assigned (admin only)"""
+    # Get deliveries that are pending or assigned to admin (not yet given to entregador)
+    deliveries = await db.deliveries.find(
+        {"status": {"$in": ["pendente", "em_transito"]}},
+        {"_id": 0, "photo": 0, "signature": 0}
+    ).sort("created_at", -1).to_list(1000)
+    
+    return deliveries
+
+@api_router.get("/entregadores")
+async def list_entregadores(admin: User = Depends(require_admin)):
+    """List all active entregadores (admin only)"""
+    entregadores = await db.users.find(
+        {"role": "entregador", "is_active": True},
+        {"_id": 0, "password_hash": 0}
+    ).to_list(1000)
+    
+    # Add delivery stats for each entregador
+    result = []
+    for ent in entregadores:
+        pending_count = await db.deliveries.count_documents({
+            "entregador_id": ent["user_id"],
+            "status": "pendente"
+        })
+        in_transit_count = await db.deliveries.count_documents({
+            "entregador_id": ent["user_id"],
+            "status": "em_transito"
+        })
+        result.append({
+            **ent,
+            "pending_deliveries": pending_count,
+            "in_transit_deliveries": in_transit_count
+        })
+    
+    return result
+
 # ==================== DASHBOARD & STATS ====================
 
 @api_router.get("/stats/dashboard")
