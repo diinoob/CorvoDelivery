@@ -350,6 +350,24 @@ class CorvoAPITester:
         """Test password-based login with admin/admin"""
         print("\n🔐 Testing Password Login...")
         
+        # First, ensure admin user exists with password
+        print("Creating admin user with password...")
+        admin_user_data = {
+            "email": "admin",
+            "name": "Administrator",
+            "password": "admin",
+            "role": "admin"
+        }
+        
+        # Try to create admin user (might fail if already exists, that's OK)
+        create_response = self.make_request("POST", "/users", admin_user_data, expect_success=False)
+        if create_response and create_response.get("user_id"):
+            print("  ✅ Admin user created successfully")
+        elif create_response and "já existe" in str(create_response):
+            print("  ℹ️  Admin user already exists")
+        else:
+            print("  ⚠️  Admin user creation response:", create_response)
+        
         # Test login with admin credentials
         login_data = {
             "email": "admin",
@@ -367,6 +385,7 @@ class CorvoAPITester:
             return True
         else:
             print("  ❌ Failed to login with admin/admin credentials")
+            print(f"    Response: {response}")
             return False
     
     def test_manifests(self):
