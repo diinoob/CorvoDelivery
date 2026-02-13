@@ -12,7 +12,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.intercourier.corvo",
       "infoPlist": {
-        "NSCameraUsageDescription": "Tirar fotos das entregas",
+        "NSCameraUsageDescription": "Ler códigos de barras e tirar fotos",
         "NSPhotoLibraryUsageDescription": "Selecionar fotos e assinaturas"
       }
     },
@@ -50,6 +50,12 @@
         {
           "photosPermission": "Selecionar fotos e assinaturas",
           "cameraPermission": "Tirar fotos das entregas"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Ler códigos de barras das etiquetas"
         }
       ]
     ],
