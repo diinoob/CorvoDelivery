@@ -422,6 +422,77 @@ Por favor, guarde estas credenciais em local seguro.`;
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Credentials Modal */}
+      <Modal
+        visible={showCredentialsModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowCredentialsModal(false)}
+      >
+        <View style={styles.credentialsModal}>
+          <View style={styles.credentialsHeader}>
+            <View style={styles.successIcon}>
+              <Ionicons name="checkmark-circle" size={48} color="#10b981" />
+            </View>
+            <Text style={styles.credentialsTitle}>Utilizador Criado!</Text>
+            <Text style={styles.credentialsSubtitle}>
+              Guarde ou envie estas credenciais ao novo utilizador
+            </Text>
+          </View>
+
+          {createdCredentials && (
+            <View style={styles.credentialsCard}>
+              <View style={styles.credentialItem}>
+                <Text style={styles.credentialLabel}>Nome</Text>
+                <Text style={styles.credentialValue}>{createdCredentials.name}</Text>
+              </View>
+              
+              <View style={styles.credentialItem}>
+                <Text style={styles.credentialLabel}>Função</Text>
+                <Text style={styles.credentialValue}>{createdCredentials.role}</Text>
+              </View>
+
+              <View style={styles.credentialsDivider} />
+              
+              <View style={styles.credentialItem}>
+                <Text style={styles.credentialLabel}>Utilizador</Text>
+                <Text style={[styles.credentialValue, styles.credentialHighlight]}>
+                  {createdCredentials.username}
+                </Text>
+              </View>
+              
+              <View style={styles.credentialItem}>
+                <Text style={styles.credentialLabel}>Password</Text>
+                <Text style={[styles.credentialValue, styles.credentialHighlight]}>
+                  {createdCredentials.password}
+                </Text>
+              </View>
+
+              {createdCredentials.email ? (
+                <View style={styles.credentialItem}>
+                  <Text style={styles.credentialLabel}>Email</Text>
+                  <Text style={styles.credentialValue}>{createdCredentials.email}</Text>
+                </View>
+              ) : null}
+            </View>
+          )}
+
+          <View style={styles.credentialsActions}>
+            <TouchableOpacity style={styles.copyButton} onPress={copyCredentials}>
+              <Ionicons name="copy-outline" size={20} color="#fff" />
+              <Text style={styles.copyButtonText}>Copiar Credenciais</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.doneButton}
+              onPress={() => setShowCredentialsModal(false)}
+            >
+              <Text style={styles.doneButtonText}>Concluído</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
