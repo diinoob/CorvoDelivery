@@ -97,6 +97,18 @@ export default function Dashboard() {
           </TouchableOpacity>
         )}
 
+        {isAdmin && (
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => router.push('/admin/manifests')}
+          >
+            <View style={[styles.actionIcon, { backgroundColor: '#fce7f3' }]}>
+              <Ionicons name="documents" size={24} color="#ec4899" />
+            </View>
+            <Text style={styles.actionText}>Manifestos</Text>
+          </TouchableOpacity>
+        )}
+
         <TouchableOpacity
           style={styles.actionButton}
           onPress={() => router.push('/(tabs)/reports')}
