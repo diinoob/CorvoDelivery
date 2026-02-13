@@ -69,7 +69,7 @@ export default function AdminUsers() {
   };
 
   const createUser = async () => {
-    if (!newUser.name.trim() || !newUser.email.trim() || !newUser.password.trim()) {
+    if (!newUser.name.trim() || !newUser.username.trim() || !newUser.password.trim()) {
       Alert.alert('Erro', 'Preencha todos os campos obrigatórios');
       return;
     }
@@ -83,17 +83,53 @@ export default function AdminUsers() {
     try {
       await apiRequest('/users', {
         method: 'POST',
-        body: JSON.stringify(newUser),
+        body: JSON.stringify({
+          name: newUser.name,
+          email: newUser.username, // username é guardado como email no backend
+          password: newUser.password,
+          role: newUser.role,
+        }),
       });
+      
+      // Guardar credenciais para mostrar no modal
+      setCreatedCredentials({
+        name: newUser.name,
+        username: newUser.username,
+        password: newUser.password,
+        email: newUser.email,
+        role: newUser.role === 'admin' ? 'Administrador' : 'Entregador',
+      });
+      
       setShowAddModal(false);
-      setNewUser({ name: '', email: '', password: '', role: 'entregador' });
+      setShowCredentialsModal(true);
+      setNewUser({ name: '', username: '', email: '', password: '', role: 'entregador' });
       fetchUsers();
-      Alert.alert('Sucesso', 'Utilizador criado com sucesso');
     } catch (error: any) {
       Alert.alert('Erro', error.message || 'Não foi possível criar o utilizador');
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const copyCredentials = () => {
+    if (!createdCredentials) return;
+    
+    const text = `Credenciais de Acesso - Intercourier Corvo
+
+Nome: ${createdCredentials.name}
+Função: ${createdCredentials.role}
+Utilizador: ${createdCredentials.username}
+Password: ${createdCredentials.password}
+${createdCredentials.email ? `Email: ${createdCredentials.email}` : ''}
+
+Por favor, guarde estas credenciais em local seguro.`;
+    
+    if (Platform.OS === 'web') {
+      navigator.clipboard?.writeText(text);
+    } else {
+      Clipboard.setString(text);
+    }
+    Alert.alert('Copiado', 'Credenciais copiadas para a área de transferência');
   };
 
   const toggleUserStatus = async (userId: string, isActive: boolean) => {
