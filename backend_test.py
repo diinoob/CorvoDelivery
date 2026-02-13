@@ -346,6 +346,164 @@ class CorvoAPITester:
         
         return results
     
+    def test_delivery_assignment(self):
+        """Test delivery assignment endpoints specifically requested"""
+        print("\n🎯 Testing Delivery Assignment Endpoints...")
+        results = {}
+        
+        # First ensure we have admin authentication
+        if not self.test_password_login():
+            print("  ❌ Cannot test delivery assignments without admin authentication")
+            return {"assignment_auth": False}
+        
+        # Step 1: Create entregador user as requested
+        print("Step 1: Creating test entregador user")
+        entregador_data = {
+            "email": "entregador1",
+            "name": "João Entregador", 
+            "password": "test123",
+            "role": "entregador"
+        }
+        
+        create_entregador_response = self.make_request("POST", "/users", entregador_data, expect_success=False)
+        entregador_id = None
+        
+        if create_entregador_response and create_entregador_response.get("user_id"):
+            print("  ✅ Test entregador created successfully")
+            entregador_id = create_entregador_response["user_id"]
+            results["create_entregador"] = True
+        elif create_entregador_response and ("já existe" in str(create_entregador_response) or "já registado" in str(create_entregador_response)):
+            print("  ℹ️  Entregador user already exists, getting existing user...")
+            # Try to find existing entregador by listing users
+            users_response = self.make_request("GET", "/users")
+            if users_response:
+                for user in users_response:
+                    if user.get("email") == "entregador1":
+                        entregador_id = user.get("user_id")
+                        print(f"  ✅ Found existing entregador with ID: {entregador_id}")
+                        results["create_entregador"] = True
+                        break
+        
+        if not entregador_id:
+            print("  ❌ Failed to create or find entregador user")
+            results["create_entregador"] = False
+            return results
+        
+        # Step 2: Create test deliveries to assign
+        print("Step 2: Creating test deliveries for assignment")
+        test_delivery_ids = []
+        
+        for i in range(2):
+            delivery_data = {
+                "client_name": f"Test Client {i+1}",
+                "address": f"{i+100} Assignment Test Street, Test City",
+                "notes": f"Test delivery {i+1} for assignment"
+            }
+            
+            delivery_response = self.make_request("POST", "/deliveries", delivery_data)
+            if delivery_response and delivery_response.get("delivery_id"):
+                test_delivery_ids.append(delivery_response["delivery_id"])
+        
+        if len(test_delivery_ids) < 1:
+            print("  ❌ Failed to create test deliveries")
+            results["create_test_deliveries"] = False
+            return results
+        
+        print(f"  ✅ Created {len(test_delivery_ids)} test deliveries")
+        results["create_test_deliveries"] = True
+        
+        # Step 3: Test GET /api/entregadores
+        print("Step 3: Testing GET /api/entregadores")
+        entregadores_response = self.make_request("GET", "/entregadores")
+        if entregadores_response and isinstance(entregadores_response, list):
+            print(f"  ✅ Retrieved {len(entregadores_response)} active entregadores")
+            
+            # Check if our entregador is in the list with stats
+            found_entregador = None
+            for ent in entregadores_response:
+                if ent.get("user_id") == entregador_id:
+                    found_entregador = ent
+                    break
+            
+            if found_entregador:
+                print(f"    Found entregador: {found_entregador.get('name')}")
+                print(f"    Pending deliveries: {found_entregador.get('pending_deliveries', 0)}")
+                print(f"    In transit deliveries: {found_entregador.get('in_transit_deliveries', 0)}")
+                results["list_entregadores"] = True
+            else:
+                print(f"  ⚠️  Entregador {entregador_id} not found in active entregadores list")
+                results["list_entregadores"] = False
+        else:
+            print("  ❌ Failed to list active entregadores")
+            results["list_entregadores"] = False
+        
+        # Step 4: Test GET /api/deliveries/unassigned
+        print("Step 4: Testing GET /api/deliveries/unassigned")
+        unassigned_response = self.make_request("GET", "/deliveries/unassigned")
+        if unassigned_response and isinstance(unassigned_response, list):
+            print(f"  ✅ Retrieved {len(unassigned_response)} unassigned deliveries")
+            
+            # Check if our test deliveries are in the unassigned list
+            found_deliveries = [d for d in unassigned_response if d.get("delivery_id") in test_delivery_ids]
+            print(f"    Found {len(found_deliveries)} of our test deliveries in unassigned list")
+            results["list_unassigned"] = True
+        else:
+            print("  ❌ Failed to list unassigned deliveries")
+            results["list_unassigned"] = False
+        
+        # Step 5: Test POST /api/deliveries/assign
+        print("Step 5: Testing POST /api/deliveries/assign")
+        assignment_data = {
+            "delivery_ids": test_delivery_ids[:1],  # Assign just one delivery
+            "entregador_id": entregador_id
+        }
+        
+        assign_response = self.make_request("POST", "/deliveries/assign", assignment_data)
+        if assign_response and assign_response.get("success"):
+            print(f"  ✅ Successfully assigned {assign_response.get('updated_count', 0)} deliveries")
+            print(f"    Assigned to: {assign_response.get('entregador_name')}")
+            results["assign_deliveries"] = True
+        else:
+            print("  ❌ Failed to assign deliveries")
+            print(f"    Response: {assign_response}")
+            results["assign_deliveries"] = False
+        
+        # Step 6: Verify assignment by checking delivery details
+        print("Step 6: Verifying assignment in delivery records")
+        if test_delivery_ids:
+            verify_response = self.make_request("GET", f"/deliveries/{test_delivery_ids[0]}")
+            if verify_response:
+                assigned_entregador_id = verify_response.get("entregador_id")
+                assigned_entregador_name = verify_response.get("entregador_name")
+                
+                if assigned_entregador_id == entregador_id:
+                    print(f"  ✅ Delivery correctly assigned to {assigned_entregador_name}")
+                    results["verify_assignment"] = True
+                else:
+                    print(f"  ❌ Assignment verification failed. Expected {entregador_id}, got {assigned_entregador_id}")
+                    results["verify_assignment"] = False
+            else:
+                print("  ❌ Failed to retrieve delivery for verification")
+                results["verify_assignment"] = False
+        
+        # Step 7: Test entregadores endpoint again to see updated stats
+        print("Step 7: Checking updated entregador stats after assignment")
+        entregadores_after = self.make_request("GET", "/entregadores")
+        if entregadores_after and isinstance(entregadores_after, list):
+            for ent in entregadores_after:
+                if ent.get("user_id") == entregador_id:
+                    print(f"  Updated stats for {ent.get('name')}:")
+                    print(f"    Pending deliveries: {ent.get('pending_deliveries', 0)}")
+                    print(f"    In transit deliveries: {ent.get('in_transit_deliveries', 0)}")
+                    results["updated_stats"] = True
+                    break
+            else:
+                results["updated_stats"] = False
+        else:
+            results["updated_stats"] = False
+        
+        return results
+    
     def test_password_login(self):
         """Test password-based login with admin/admin"""
         print("\n🔐 Testing Password Login...")
