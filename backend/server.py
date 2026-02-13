@@ -621,6 +621,17 @@ async def list_deliveries(
     deliveries = await db.deliveries.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return deliveries
 
+@api_router.get("/deliveries/unassigned")
+async def get_unassigned_deliveries(admin: User = Depends(require_admin)):
+    """Get all pending deliveries that can be assigned (admin only)"""
+    # Get deliveries that are pending or assigned to admin (not yet given to entregador)
+    deliveries = await db.deliveries.find(
+        {"status": {"$in": ["pendente", "em_transito"]}},
+        {"_id": 0, "photo": 0, "signature": 0}
+    ).sort("created_at", -1).to_list(1000)
+    
+    return deliveries
+
 @api_router.post("/deliveries")
 async def create_delivery(
     delivery_data: DeliveryCreate,
