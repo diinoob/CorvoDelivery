@@ -109,6 +109,18 @@ export default function Dashboard() {
           </TouchableOpacity>
         )}
 
+        {isAdmin && (
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => router.push('/admin/assign-deliveries')}
+          >
+            <View style={[styles.actionIcon, { backgroundColor: '#dcfce7' }]}>
+              <Ionicons name="git-branch" size={24} color="#16a34a" />
+            </View>
+            <Text style={styles.actionText}>Atribuir</Text>
+          </TouchableOpacity>
+        )}
+
         <TouchableOpacity
           style={styles.actionButton}
           onPress={() => router.push('/(tabs)/reports')}
