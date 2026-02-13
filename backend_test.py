@@ -729,6 +729,7 @@ class CorvoAPITester:
         all_results.update(self.test_auth_endpoints())
         all_results.update(self.test_user_management())
         all_results.update(self.test_deliveries())
+        all_results.update(self.test_delivery_assignment())  # New assignment tests
         all_results.update(self.test_dashboard_stats())
         all_results.update(self.test_reports())
         all_results.update(self.test_manifests())
