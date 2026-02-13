@@ -537,11 +537,12 @@ class CorvoAPITester:
                 # Test tracking code matching
                 print("Testing GET /api/deliveries/match/{tracking_code}")
                 match_response = self.make_request("GET", "/deliveries/match/1Z999AA10123456784")
-                if match_response and match_response.get("tracking_code") == "1Z999AA10123456784":
+                if match_response and match_response.get("match") == True and match_response.get("delivery"):
                     print("  ✅ Successfully matched delivery by tracking code")
                     results["delivery_tracking_match"] = True
                 else:
                     print("  ❌ Failed to match delivery by tracking code")
+                    print(f"    Response: {match_response}")
                     results["delivery_tracking_match"] = False
             else:
                 print(f"  ❌ Expected 2 deliveries from manifest, found {len(manifest_deliveries)}")
