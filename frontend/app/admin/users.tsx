@@ -309,7 +309,7 @@ Por favor, guarde estas credenciais em local seguro.`;
 
             <ScrollView style={styles.modalContent} keyboardShouldPersistTaps="handled">
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Nome do Entregador *</Text>
+                <Text style={styles.label}>Nome Completo *</Text>
                 <TextInput
                   style={styles.input}
                   value={newUser.name}
@@ -323,8 +323,8 @@ Por favor, guarde estas credenciais em local seguro.`;
                 <Text style={styles.label}>Utilizador (login) *</Text>
                 <TextInput
                   style={styles.input}
-                  value={newUser.email}
-                  onChangeText={(text) => setNewUser({ ...newUser, email: text })}
+                  value={newUser.username}
+                  onChangeText={(text) => setNewUser({ ...newUser, username: text })}
                   placeholder="Ex: joao.silva"
                   placeholderTextColor="#94a3b8"
                   autoCapitalize="none"
@@ -332,6 +332,23 @@ Por favor, guarde estas credenciais em local seguro.`;
                 />
                 <Text style={styles.inputHint}>
                   Este será o nome de utilizador para fazer login
+                </Text>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Email (opcional)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newUser.email}
+                  onChangeText={(text) => setNewUser({ ...newUser, email: text })}
+                  placeholder="email@exemplo.com"
+                  placeholderTextColor="#94a3b8"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                />
+                <Text style={styles.inputHint}>
+                  Para enviar as credenciais de acesso
                 </Text>
               </View>
 
