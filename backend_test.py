@@ -346,6 +346,185 @@ class CorvoAPITester:
         
         return results
     
+    def test_password_login(self):
+        """Test password-based login with admin/admin"""
+        print("\n🔐 Testing Password Login...")
+        
+        # Test login with admin credentials
+        login_data = {
+            "email": "admin",
+            "password": "admin"
+        }
+        
+        print("Testing POST /api/auth/login with admin/admin")
+        response = self.make_request("POST", "/auth/login", login_data, expect_success=False)
+        
+        if response and response.get("session_token"):
+            print("  ✅ Successfully logged in with admin/admin")
+            self.session_token = response["session_token"]
+            if "user_id" in response:
+                self.user_id = response["user_id"]
+            return True
+        else:
+            print("  ❌ Failed to login with admin/admin credentials")
+            return False
+    
+    def test_manifests(self):
+        """Test manifest processing endpoints"""
+        print("\n📋 Testing Manifest Processing Endpoints...")
+        results = {}
+        
+        # Try password login first
+        if not self.test_password_login():
+            print("  ❌ Cannot test manifests without authentication")
+            return {"manifests_auth": False}
+        
+        # Test manifest data
+        manifest_data = {
+            "route_id": "ROTA-TEST-001",
+            "date": "2026-02-13",
+            "location": "Armazém Central",
+            "entries": [
+                {
+                    "tracking_code": "1Z999AA10123456784",
+                    "customer_name": "Maria Silva",
+                    "address": "Rua Principal, 123",
+                    "postal_code": "4000-001",
+                    "city": "Porto"
+                },
+                {
+                    "tracking_code": "1Z999AA10123456785",
+                    "customer_name": "João Santos",
+                    "address": "Avenida da Liberdade, 456",
+                    "postal_code": "1000-001",
+                    "city": "Lisboa"
+                }
+            ]
+        }
+        
+        # Test POST /api/manifests (create manifest)
+        print("Testing POST /api/manifests")
+        create_response = self.make_request("POST", "/manifests", manifest_data)
+        manifest_id = None
+        if create_response and create_response.get("success") and create_response.get("manifest_id"):
+            print("  ✅ Manifest created successfully")
+            manifest_id = create_response["manifest_id"]
+            results["create_manifest"] = True
+            print(f"    Manifest ID: {manifest_id}")
+            print(f"    Deliveries created: {create_response.get('deliveries_created', 0)}")
+        else:
+            print("  ❌ Failed to create manifest")
+            results["create_manifest"] = False
+        
+        # Test GET /api/manifests (list manifests)
+        print("Testing GET /api/manifests")
+        list_response = self.make_request("GET", "/manifests")
+        if list_response and isinstance(list_response, list) and len(list_response) > 0:
+            print(f"  ✅ Successfully retrieved {len(list_response)} manifests")
+            results["list_manifests"] = True
+        else:
+            print("  ❌ Failed to list manifests")
+            results["list_manifests"] = False
+        
+        if manifest_id:
+            # Test GET /api/manifests/{manifest_id} (get manifest details)
+            print(f"Testing GET /api/manifests/{manifest_id}")
+            details_response = self.make_request("GET", f"/manifests/{manifest_id}")
+            if details_response and details_response.get("manifest_id") == manifest_id:
+                print("  ✅ Successfully retrieved manifest details")
+                print(f"    Route ID: {details_response.get('route_id')}")
+                print(f"    Total entries: {details_response.get('total_entries', 0)}")
+                if "deliveries" in details_response:
+                    print(f"    Associated deliveries: {len(details_response['deliveries'])}")
+                if "stats" in details_response:
+                    stats = details_response["stats"]
+                    print(f"    Stats - Total: {stats.get('total')}, Pending: {stats.get('pending')}")
+                results["get_manifest_details"] = True
+            else:
+                print("  ❌ Failed to get manifest details")
+                results["get_manifest_details"] = False
+            
+            # Test POST /api/manifests/{manifest_id}/sign (sign manifest)
+            print(f"Testing POST /api/manifests/{manifest_id}/sign")
+            signature_data = {
+                "signature": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+            }
+            sign_response = self.make_request("POST", f"/manifests/{manifest_id}/sign", signature_data)
+            if sign_response and sign_response.get("success"):
+                print("  ✅ Successfully signed manifest")
+                results["sign_manifest"] = True
+            else:
+                print("  ❌ Failed to sign manifest")
+                results["sign_manifest"] = False
+            
+            # Test POST /api/manifests/{manifest_id}/close (close manifest)
+            print(f"Testing POST /api/manifests/{manifest_id}/close")
+            close_response = self.make_request("POST", f"/manifests/{manifest_id}/close")
+            if close_response and close_response.get("success"):
+                print("  ✅ Successfully closed manifest")
+                results["close_manifest"] = True
+            else:
+                print("  ❌ Failed to close manifest")
+                results["close_manifest"] = False
+            
+            # Test GET /api/manifests/{manifest_id}/pdf (download PDF)
+            print(f"Testing GET /api/manifests/{manifest_id}/pdf")
+            # For PDF download, we expect a different response format
+            try:
+                url = f"{self.base_url}/manifests/{manifest_id}/pdf"
+                headers = {"Authorization": f"Bearer {self.session_token}"}
+                response = requests.get(url, headers=headers, timeout=30)
+                
+                print(f"  GET /manifests/{manifest_id}/pdf -> {response.status_code}")
+                
+                if response.status_code == 200:
+                    content_type = response.headers.get('content-type', '')
+                    if 'application/pdf' in content_type or len(response.content) > 1000:
+                        print("  ✅ Successfully generated and downloaded manifest PDF")
+                        results["download_manifest_pdf"] = True
+                    else:
+                        print("  ❌ PDF response doesn't look like a valid PDF")
+                        results["download_manifest_pdf"] = False
+                else:
+                    print(f"  ❌ Failed to download PDF: {response.text}")
+                    results["download_manifest_pdf"] = False
+            except Exception as e:
+                print(f"  ❌ Error downloading PDF: {e}")
+                results["download_manifest_pdf"] = False
+        
+        # Test delivery creation from manifest entries
+        print("Testing deliveries created from manifest entries...")
+        deliveries_response = self.make_request("GET", "/deliveries")
+        if deliveries_response and isinstance(deliveries_response, list):
+            # Look for deliveries with our test tracking codes
+            manifest_deliveries = [
+                d for d in deliveries_response 
+                if d.get("tracking_code") in ["1Z999AA10123456784", "1Z999AA10123456785"]
+            ]
+            if len(manifest_deliveries) >= 2:
+                print(f"  ✅ Found {len(manifest_deliveries)} deliveries created from manifest")
+                results["manifest_deliveries_created"] = True
+                
+                # Test tracking code matching
+                print("Testing GET /api/deliveries/match/{tracking_code}")
+                match_response = self.make_request("GET", "/deliveries/match/1Z999AA10123456784")
+                if match_response and match_response.get("tracking_code") == "1Z999AA10123456784":
+                    print("  ✅ Successfully matched delivery by tracking code")
+                    results["delivery_tracking_match"] = True
+                else:
+                    print("  ❌ Failed to match delivery by tracking code")
+                    results["delivery_tracking_match"] = False
+            else:
+                print(f"  ❌ Expected 2 deliveries from manifest, found {len(manifest_deliveries)}")
+                results["manifest_deliveries_created"] = False
+                results["delivery_tracking_match"] = False
+        else:
+            print("  ❌ Failed to retrieve deliveries")
+            results["manifest_deliveries_created"] = False
+            results["delivery_tracking_match"] = False
+        
+        return results
+    
     def run_all_tests(self):
         """Run all tests and return comprehensive results"""
         print("🚀 Starting Intercourier Corvo Backend API Tests")
