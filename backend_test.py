@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 import uuid
 
 # Get backend URL from frontend .env
-BACKEND_URL = "https://courier-hub-40.preview.emergentagent.com/api"
+BACKEND_URL = "https://entrega-mobile-1.preview.emergentagent.com/api"
 
 class CorvoAPITester:
     def __init__(self):
