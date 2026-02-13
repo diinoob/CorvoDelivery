@@ -115,6 +115,38 @@ class DailyReport(BaseModel):
     entregador_stats: List[dict]
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+# ==================== MANIFEST MODELS ====================
+
+class ManifestEntry(BaseModel):
+    tracking_code: str
+    customer_name: str
+    address: str
+    city: str = ""
+    postal_code: str = ""
+    delivered: bool = False
+    delivered_at: Optional[datetime] = None
+    signature: Optional[str] = None
+
+class Manifest(BaseModel):
+    manifest_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    route_id: str
+    date: str
+    location: str
+    entries: List[ManifestEntry] = []
+    manifest_image: Optional[str] = None  # base64 image of original manifest
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_by: str
+    closed: bool = False
+    closed_at: Optional[datetime] = None
+    admin_signature: Optional[str] = None
+
+class ManifestCreate(BaseModel):
+    route_id: str
+    date: str
+    location: str
+    entries: List[dict]
+    manifest_image: Optional[str] = None
+
 # ==================== PASSWORD AUTH MODELS ====================
 
 class LoginRequest(BaseModel):
