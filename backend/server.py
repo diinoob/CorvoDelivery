@@ -1730,6 +1730,119 @@ async def match_delivery(tracking_code: str, current_user: User = Depends(get_cu
         "message": "Código não encontrado no sistema"
     }
 
+# ==================== OCR / MANIFEST PARSING ====================
+
+class ManifestParseRequest(BaseModel):
+    image_base64: str
+
+async def parse_manifest_with_llm(image_base64: str) -> dict:
+    """Use LLM with vision to parse manifest image and extract delivery data"""
+    from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+    
+    api_key = os.environ.get("EMERGENT_LLM_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="LLM API key not configured")
+    
+    # Clean base64 string if it has data URL prefix
+    if image_base64.startswith('data:'):
+        image_base64 = image_base64.split(',')[1]
+    
+    system_message = """Você é um assistente especializado em extrair dados de manifestos de entrega.
+Analise a imagem do manifesto e extraia TODAS as entregas listadas.
+
+Para cada entrega encontrada, extraia:
+- tracking_code: Código de rastreamento/número de envio
+- customer_name: Nome do cliente/destinatário  
+- address: Morada completa
+- postal_code: Código postal (se disponível)
+- city: Cidade (se disponível)
+
+Responda SEMPRE em formato JSON válido com esta estrutura:
+{
+    "route_id": "identificador da rota se disponível",
+    "date": "data do manifesto se disponível",
+    "location": "local de partida se disponível",
+    "entries": [
+        {
+            "tracking_code": "código",
+            "customer_name": "nome",
+            "address": "morada",
+            "postal_code": "código postal",
+            "city": "cidade"
+        }
+    ]
+}
+
+Se não conseguir extrair algum campo, deixe como string vazia.
+IMPORTANTE: Extraia TODAS as entregas que conseguir identificar na imagem.
+Responda APENAS com o JSON, sem texto adicional."""
+    
+    try:
+        chat = LlmChat(
+            api_key=api_key,
+            session_id=f"manifest_parse_{uuid.uuid4().hex[:8]}",
+            system_message=system_message
+        ).with_model("openai", "gpt-4o")
+        
+        image_content = ImageContent(image_base64=image_base64)
+        
+        user_message = UserMessage(
+            text="Extraia todas as entregas deste manifesto. Retorne os dados em formato JSON.",
+            file_contents=[image_content]
+        )
+        
+        response = await chat.send_message(user_message)
+        
+        # Parse JSON response
+        # Clean response - remove markdown code blocks if present
+        response_clean = response.strip()
+        if response_clean.startswith("```json"):
+            response_clean = response_clean[7:]
+        elif response_clean.startswith("```"):
+            response_clean = response_clean[3:]
+        if response_clean.endswith("```"):
+            response_clean = response_clean[:-3]
+        response_clean = response_clean.strip()
+        
+        try:
+            parsed_data = json.loads(response_clean)
+            return parsed_data
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON parse error: {e}, response: {response_clean[:500]}")
+            return {
+                "route_id": "PARSED",
+                "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                "location": "Origem não identificada",
+                "entries": [],
+                "raw_response": response_clean
+            }
+            
+    except Exception as e:
+        logger.error(f"LLM parsing error: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao processar manifesto: {str(e)}")
+
+@api_router.post("/manifests/parse")
+async def parse_manifest_image(data: ManifestParseRequest, admin: User = Depends(require_admin)):
+    """Parse manifest image using AI to extract delivery entries"""
+    result = await parse_manifest_with_llm(data.image_base64)
+    return result
+
+@api_router.post("/manifests/upload")
+async def upload_and_parse_manifest(
+    file: UploadFile = File(...),
+    admin: User = Depends(require_admin)
+):
+    """Upload manifest image and parse it using AI"""
+    # Read file and convert to base64
+    content = await file.read()
+    image_base64 = base64.b64encode(content).decode('utf-8')
+    
+    # Parse with LLM
+    result = await parse_manifest_with_llm(image_base64)
+    result["manifest_image"] = f"data:image/{file.content_type.split('/')[-1] if file.content_type else 'png'};base64,{image_base64}"
+    
+    return result
+
 # ==================== ROOT ====================
 
 @api_router.get("/")
