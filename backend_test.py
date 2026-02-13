@@ -159,6 +159,7 @@ class CorvoAPITester:
         new_user_data = {
             "email": f"entregador_{int(time.time())}@test.com",
             "name": "Test Entregador",
+            "password": "test123",  # Added missing password field
             "role": "entregador"
         }
         create_response = self.make_request("POST", "/users", new_user_data)
