@@ -746,7 +746,7 @@ async def generate_receipt(delivery_id: str, current_user: User = Depends(get_cu
     elements.append(Paragraph("Comprovativo de Entrega", subtitle_style))
     
     # Tracking code box
-    tracking_data = [[Paragraph(f"<b>Código de Rastreamento</b>", styles['Normal']), 
+    tracking_data = [[Paragraph("<b>Código de Rastreamento</b>", styles['Normal']), 
                       Paragraph(f"<b>{delivery.get('tracking_code', 'N/A')}</b>", styles['Normal'])]]
     tracking_table = Table(tracking_data, colWidths=[8*cm, 8*cm])
     tracking_table.setStyle(TableStyle([
