@@ -350,7 +350,14 @@ class CorvoAPITester:
         """Test password-based login with admin/admin"""
         print("\n🔐 Testing Password Login...")
         
-        # First, ensure admin user exists with password
+        # First, we need to authenticate via session to create the admin user if it doesn't exist
+        if not self.session_token:
+            print("  Need to authenticate first to create admin user...")
+            if not self.create_test_admin_user():
+                print("  ❌ Cannot authenticate to set up admin user")
+                return False
+        
+        # Create admin user with password using existing session
         print("Creating admin user with password...")
         admin_user_data = {
             "email": "admin",
@@ -368,6 +375,9 @@ class CorvoAPITester:
         else:
             print("  ⚠️  Admin user creation response:", create_response)
         
+        # Clear session token to test password login
+        self.session_token = None
+        
         # Test login with admin credentials
         login_data = {
             "email": "admin",
@@ -375,7 +385,7 @@ class CorvoAPITester:
         }
         
         print("Testing POST /api/auth/login with admin/admin")
-        response = self.make_request("POST", "/auth/login", login_data, expect_success=False)
+        response = self.make_request("POST", "/auth/login", login_data, headers={}, expect_success=False)
         
         if response and response.get("session_token"):
             print("  ✅ Successfully logged in with admin/admin")
