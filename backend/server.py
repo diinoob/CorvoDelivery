@@ -1358,6 +1358,376 @@ async def get_reports_history(admin: User = Depends(require_admin)):
     reports = await db.daily_reports.find({}, {"_id": 0}).sort("date", -1).to_list(100)
     return reports
 
+# ==================== MANIFEST MANAGEMENT ====================
+
+@api_router.post("/manifests")
+async def create_manifest(manifest_data: ManifestCreate, admin: User = Depends(require_admin)):
+    """Create a new manifest and its deliveries (admin only)"""
+    manifest_id = str(uuid.uuid4())
+    
+    # Create deliveries from manifest entries
+    deliveries_created = []
+    for entry in manifest_data.entries:
+        tracking_code = entry.get("tracking_code", "").strip()
+        if not tracking_code:
+            continue
+        
+        # Check if delivery already exists
+        existing = await db.deliveries.find_one({"tracking_code": tracking_code})
+        if existing:
+            continue
+        
+        # Create delivery
+        delivery = {
+            "delivery_id": str(uuid.uuid4()),
+            "tracking_code": tracking_code,
+            "client_name": entry.get("customer_name", ""),
+            "client_email": entry.get("email", ""),
+            "address": f"{entry.get('address', '')} {entry.get('postal_code', '')} {entry.get('city', '')}".strip(),
+            "status": "pendente",
+            "notes": f"Manifesto: {manifest_data.route_id}",
+            "photo": None,
+            "signature": None,
+            "entregador_id": admin.user_id,
+            "entregador_name": admin.name,
+            "manifest_id": manifest_id,
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+            "delivered_at": None
+        }
+        await db.deliveries.insert_one(delivery)
+        deliveries_created.append(delivery)
+    
+    # Create manifest record
+    manifest = {
+        "manifest_id": manifest_id,
+        "route_id": manifest_data.route_id,
+        "date": manifest_data.date,
+        "location": manifest_data.location,
+        "entries": manifest_data.entries,
+        "manifest_image": manifest_data.manifest_image,
+        "created_at": datetime.now(timezone.utc),
+        "created_by": admin.user_id,
+        "created_by_name": admin.name,
+        "closed": False,
+        "closed_at": None,
+        "admin_signature": None,
+        "total_entries": len(manifest_data.entries),
+        "deliveries_created": len(deliveries_created)
+    }
+    
+    await db.manifests.insert_one(manifest)
+    
+    return {
+        "success": True,
+        "manifest_id": manifest_id,
+        "deliveries_created": len(deliveries_created),
+        "total_entries": len(manifest_data.entries)
+    }
+
+@api_router.get("/manifests")
+async def list_manifests(admin: User = Depends(require_admin)):
+    """List all manifests (admin only)"""
+    manifests = await db.manifests.find({}, {"_id": 0, "manifest_image": 0, "entries": 0}).sort("created_at", -1).to_list(100)
+    return manifests
+
+@api_router.get("/manifests/{manifest_id}")
+async def get_manifest(manifest_id: str, admin: User = Depends(require_admin)):
+    """Get manifest details with deliveries (admin only)"""
+    manifest = await db.manifests.find_one({"manifest_id": manifest_id}, {"_id": 0})
+    if not manifest:
+        raise HTTPException(status_code=404, detail="Manifesto não encontrado")
+    
+    # Get deliveries for this manifest
+    deliveries = await db.deliveries.find(
+        {"manifest_id": manifest_id},
+        {"_id": 0, "photo": 0}
+    ).to_list(1000)
+    
+    manifest["deliveries"] = deliveries
+    
+    # Calculate stats
+    total = len(deliveries)
+    delivered = len([d for d in deliveries if d["status"] == "entregue"])
+    pending = len([d for d in deliveries if d["status"] == "pendente"])
+    in_transit = len([d for d in deliveries if d["status"] == "em_transito"])
+    failed = len([d for d in deliveries if d["status"] == "falhou"])
+    
+    manifest["stats"] = {
+        "total": total,
+        "delivered": delivered,
+        "pending": pending,
+        "in_transit": in_transit,
+        "failed": failed,
+        "completion_rate": round((delivered / total * 100) if total > 0 else 0, 1)
+    }
+    
+    return manifest
+
+@api_router.post("/manifests/{manifest_id}/close")
+async def close_manifest(manifest_id: str, admin: User = Depends(require_admin)):
+    """Close manifest and sign it (admin only)"""
+    manifest = await db.manifests.find_one({"manifest_id": manifest_id})
+    if not manifest:
+        raise HTTPException(status_code=404, detail="Manifesto não encontrado")
+    
+    if manifest.get("closed"):
+        raise HTTPException(status_code=400, detail="Manifesto já está fechado")
+    
+    # Update manifest
+    await db.manifests.update_one(
+        {"manifest_id": manifest_id},
+        {"$set": {
+            "closed": True,
+            "closed_at": datetime.now(timezone.utc),
+            "closed_by": admin.user_id,
+            "closed_by_name": admin.name
+        }}
+    )
+    
+    return {"success": True, "message": "Manifesto fechado com sucesso"}
+
+@api_router.post("/manifests/{manifest_id}/sign")
+async def sign_manifest(manifest_id: str, request: Request, admin: User = Depends(require_admin)):
+    """Add admin signature to manifest"""
+    body = await request.json()
+    signature = body.get("signature")
+    
+    if not signature:
+        raise HTTPException(status_code=400, detail="Assinatura é obrigatória")
+    
+    manifest = await db.manifests.find_one({"manifest_id": manifest_id})
+    if not manifest:
+        raise HTTPException(status_code=404, detail="Manifesto não encontrado")
+    
+    await db.manifests.update_one(
+        {"manifest_id": manifest_id},
+        {"$set": {
+            "admin_signature": signature,
+            "signed_at": datetime.now(timezone.utc),
+            "signed_by": admin.user_id,
+            "signed_by_name": admin.name
+        }}
+    )
+    
+    return {"success": True, "message": "Manifesto assinado com sucesso"}
+
+@api_router.get("/manifests/{manifest_id}/pdf")
+async def download_manifest_pdf(manifest_id: str, admin: User = Depends(require_admin)):
+    """Generate PDF of completed manifest with signatures"""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import cm
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+    import tempfile
+    
+    manifest = await db.manifests.find_one({"manifest_id": manifest_id}, {"_id": 0})
+    if not manifest:
+        raise HTTPException(status_code=404, detail="Manifesto não encontrado")
+    
+    # Get deliveries
+    deliveries = await db.deliveries.find(
+        {"manifest_id": manifest_id},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    # Create PDF
+    output = BytesIO()
+    doc = SimpleDocTemplate(output, pagesize=A4, topMargin=1.5*cm, bottomMargin=1.5*cm, leftMargin=1.5*cm, rightMargin=1.5*cm)
+    elements = []
+    
+    styles = getSampleStyleSheet()
+    
+    title_style = ParagraphStyle(
+        'Title',
+        parent=styles['Heading1'],
+        fontSize=18,
+        alignment=TA_CENTER,
+        spaceAfter=5,
+        textColor=colors.HexColor('#1a365d')
+    )
+    
+    subtitle_style = ParagraphStyle(
+        'Subtitle',
+        parent=styles['Normal'],
+        fontSize=12,
+        alignment=TA_CENTER,
+        spaceAfter=20,
+        textColor=colors.HexColor('#64748b')
+    )
+    
+    # Header
+    elements.append(Paragraph("INTERCOURIER CORVO", title_style))
+    elements.append(Paragraph("Manifesto de Entregas", subtitle_style))
+    
+    # Manifest info
+    info_data = [
+        ["Rota:", manifest.get("route_id", "N/A")],
+        ["Data:", manifest.get("date", "N/A")],
+        ["Local:", manifest.get("location", "N/A")],
+        ["Criado por:", manifest.get("created_by_name", "N/A")],
+    ]
+    
+    info_table = Table(info_data, colWidths=[4*cm, 13*cm])
+    info_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#64748b')),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ]))
+    elements.append(info_table)
+    elements.append(Spacer(1, 0.5*cm))
+    
+    # Deliveries table
+    elements.append(Paragraph("Entregas", ParagraphStyle('H2', parent=styles['Heading2'], fontSize=14, textColor=colors.HexColor('#1a365d'))))
+    
+    status_pt = {
+        "pendente": "Pendente",
+        "em_transito": "Em Trânsito",
+        "entregue": "Entregue",
+        "falhou": "Falhou"
+    }
+    
+    table_data = [["Código", "Cliente", "Morada", "Estado", "Data/Hora Entrega"]]
+    
+    for d in deliveries:
+        delivered_at = d.get("delivered_at")
+        if delivered_at and hasattr(delivered_at, 'strftime'):
+            dt_str = delivered_at.strftime('%d/%m/%Y %H:%M')
+        else:
+            dt_str = "-"
+        
+        table_data.append([
+            d.get("tracking_code", "")[:15],
+            d.get("client_name", "")[:20],
+            d.get("address", "")[:30],
+            status_pt.get(d.get("status", ""), d.get("status", "")),
+            dt_str
+        ])
+    
+    deliveries_table = Table(table_data, colWidths=[3*cm, 4*cm, 5*cm, 2.5*cm, 3*cm])
+    deliveries_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a365d')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 9),
+        ('FONTSIZE', (0, 1), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8fafc')]),
+    ]))
+    elements.append(deliveries_table)
+    elements.append(Spacer(1, 1*cm))
+    
+    # Stats
+    total = len(deliveries)
+    delivered = len([d for d in deliveries if d["status"] == "entregue"])
+    
+    stats_text = f"Total: {total} | Entregues: {delivered} | Taxa de conclusão: {round((delivered/total*100) if total > 0 else 0, 1)}%"
+    elements.append(Paragraph(stats_text, ParagraphStyle('Stats', parent=styles['Normal'], alignment=TA_CENTER, fontSize=11, textColor=colors.HexColor('#1a365d'))))
+    elements.append(Spacer(1, 1*cm))
+    
+    # Signatures section
+    elements.append(Paragraph("Assinaturas", ParagraphStyle('H2', parent=styles['Heading2'], fontSize=14, textColor=colors.HexColor('#1a365d'))))
+    
+    # Admin signature
+    admin_signature = manifest.get("admin_signature")
+    tmp_file_path = None
+    
+    if admin_signature:
+        try:
+            if admin_signature.startswith('data:'):
+                sig_base64 = admin_signature.split(',')[1]
+            else:
+                sig_base64 = admin_signature
+            
+            sig_bytes = base64.b64decode(sig_base64)
+            tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+            tmp_file.write(sig_bytes)
+            tmp_file.close()
+            tmp_file_path = tmp_file.name
+            
+            elements.append(Paragraph("Assinatura do Administrador:", styles['Normal']))
+            sig_img = RLImage(tmp_file_path, width=8*cm, height=2.5*cm)
+            elements.append(sig_img)
+            
+            signed_at = manifest.get("signed_at")
+            if signed_at and hasattr(signed_at, 'strftime'):
+                elements.append(Paragraph(f"Assinado em: {signed_at.strftime('%d/%m/%Y às %H:%M')}", 
+                    ParagraphStyle('SignDate', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#64748b'))))
+        except Exception as e:
+            logger.error(f"Error processing admin signature: {e}")
+    else:
+        elements.append(Paragraph("Assinatura do Administrador: ________________________", styles['Normal']))
+    
+    elements.append(Spacer(1, 0.5*cm))
+    
+    # Closed info
+    if manifest.get("closed"):
+        closed_at = manifest.get("closed_at")
+        if closed_at and hasattr(closed_at, 'strftime'):
+            elements.append(Paragraph(f"Manifesto fechado em: {closed_at.strftime('%d/%m/%Y às %H:%M')} por {manifest.get('closed_by_name', 'N/A')}", 
+                ParagraphStyle('Closed', parent=styles['Normal'], fontSize=10, alignment=TA_CENTER, textColor=colors.HexColor('#10b981'))))
+    
+    # Footer
+    elements.append(Spacer(1, 1*cm))
+    elements.append(Paragraph(f"Gerado em {datetime.now(timezone.utc).strftime('%d/%m/%Y às %H:%M')} UTC", 
+        ParagraphStyle('Footer', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER, textColor=colors.HexColor('#94a3b8'))))
+    
+    doc.build(elements)
+    
+    # Cleanup
+    if tmp_file_path:
+        import os
+        try:
+            os.unlink(tmp_file_path)
+        except:
+            pass
+    
+    output.seek(0)
+    
+    filename = f"manifesto_{manifest.get('route_id', manifest_id)}.pdf"
+    
+    return StreamingResponse(
+        output,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+@api_router.get("/deliveries/match/{tracking_code}")
+async def match_delivery(tracking_code: str, current_user: User = Depends(get_current_user)):
+    """Match a scanned tracking code with existing deliveries"""
+    # Search for exact match first
+    delivery = await db.deliveries.find_one(
+        {"tracking_code": tracking_code},
+        {"_id": 0, "photo": 0}
+    )
+    
+    if delivery:
+        return {
+            "match": True,
+            "delivery": delivery
+        }
+    
+    # Search for partial match (code might be scanned with/without spaces)
+    clean_code = tracking_code.replace(" ", "").upper()
+    all_deliveries = await db.deliveries.find({}, {"_id": 0, "photo": 0}).to_list(1000)
+    
+    for d in all_deliveries:
+        if d.get("tracking_code", "").replace(" ", "").upper() == clean_code:
+            return {
+                "match": True,
+                "delivery": d
+            }
+    
+    return {
+        "match": False,
+        "delivery": None,
+        "message": "Código não encontrado no sistema"
+    }
+
 # ==================== ROOT ====================
 
 @api_router.get("/")
