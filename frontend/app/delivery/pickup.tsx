@@ -11,12 +11,13 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons'
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { apiRequest, getApiUrl } from '../../src/utils/api';
 import { Delivery } from '../../src/types';
 import { LoadingScreen } from '../../src/components/LoadingScreen';
 import { SignaturePad } from '../../src/components/SignaturePad';
+import { BarcodeScanner } from '../../src/components/BarcodeScanner';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const statusConfig = {
@@ -32,11 +33,13 @@ export default function PickupScreen() {
   const [delivery, setDelivery] = useState<Delivery | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [showSignature, setShowSignature] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
   const [signature, setSignature] = useState<string | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
 
-  const searchDelivery = async () => {
-    if (!trackingCode.trim()) {
+  const searchDelivery = async (code?: string) => {
+    const searchCode = code || trackingCode;
+    if (!searchCode.trim()) {
       Alert.alert('Erro', 'Introduza o código de rastreamento');
       return;
     }
@@ -46,14 +49,27 @@ export default function PickupScreen() {
       // Search by tracking code
       const deliveries = await apiRequest<Delivery[]>('/deliveries');
       const found = deliveries.find(
-        d => d.tracking_code.toLowerCase() === trackingCode.trim().toLowerCase()
+        d => d.tracking_code.toLowerCase() === searchCode.trim().toLowerCase() ||
+             d.tracking_code.toLowerCase().includes(searchCode.trim().toLowerCase()) ||
+             searchCode.trim().toLowerCase().includes(d.tracking_code.toLowerCase())
       );
 
       if (found) {
         setDelivery(found);
         setSignature(null);
+        setTrackingCode(found.tracking_code);
       } else {
-        Alert.alert('Não Encontrado', 'Nenhuma entrega encontrada com este código');
+        Alert.alert(
+          'Não Encontrado', 
+          `Nenhuma entrega encontrada com o código "${searchCode}".\n\nDeseja criar uma nova entrega?`,
+          [
+            { text: 'Não', style: 'cancel' },
+            { 
+              text: 'Criar Nova', 
+              onPress: () => router.push(`/delivery/new?tracking=${searchCode}`)
+            },
+          ]
+        );
         setDelivery(null);
       }
     } catch (error) {
@@ -61,6 +77,11 @@ export default function PickupScreen() {
     } finally {
       setIsSearching(false);
     }
+  };
+
+  const handleBarcodeScan = (data: string) => {
+    setTrackingCode(data);
+    searchDelivery(data);
   };
 
   const confirmDelivery = async () => {
@@ -168,8 +189,32 @@ export default function PickupScreen() {
         <View style={styles.searchSection}>
           <Text style={styles.sectionTitle}>Picar Entrega</Text>
           <Text style={styles.subtitle}>
-            Introduza o código de rastreamento para confirmar a entrega
+            Leia o código de barras ou introduza o código de rastreamento
           </Text>
+
+          {/* Scan Button */}
+          <TouchableOpacity
+            style={styles.scanButton}
+            onPress={() => setShowScanner(true)}
+          >
+            <View style={styles.scanIconContainer}>
+              <Ionicons name="scan" size={32} color="#fff" />
+            </View>
+            <View style={styles.scanTextContainer}>
+              <Text style={styles.scanButtonTitle}>Ler Código de Barras</Text>
+              <Text style={styles.scanButtonSubtitle}>
+                Use a câmara para ler a etiqueta
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={24} color="#94a3b8" />
+          </TouchableOpacity>
+
+          {/* Manual Input */}
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>ou introduza manualmente</Text>
+            <View style={styles.dividerLine} />
+          </View>
 
           <View style={styles.searchBox}>
             <View style={styles.inputContainer}>
@@ -178,7 +223,7 @@ export default function PickupScreen() {
                 style={styles.input}
                 value={trackingCode}
                 onChangeText={setTrackingCode}
-                placeholder="Ex: IC1A2B3C4D"
+                placeholder="Ex: 1Z6X2760043545229"
                 placeholderTextColor="#94a3b8"
                 autoCapitalize="characters"
                 autoCorrect={false}
@@ -191,7 +236,7 @@ export default function PickupScreen() {
             </View>
             <TouchableOpacity
               style={[styles.searchButton, isSearching && styles.searchButtonDisabled]}
-              onPress={searchDelivery}
+              onPress={() => searchDelivery()}
               disabled={isSearching}
             >
               <Ionicons name="search" size={24} color="#fff" />
@@ -213,7 +258,7 @@ export default function PickupScreen() {
                 </View>
               </View>
 
-              <View style={styles.divider} />
+              <View style={styles.dividerFull} />
 
               <View style={styles.infoRow}>
                 <Ionicons name="person-outline" size={18} color="#64748b" />
@@ -313,6 +358,13 @@ export default function PickupScreen() {
           </View>
         )}
 
+        {/* Barcode Scanner Modal */}
+        <BarcodeScanner
+          visible={showScanner}
+          onClose={() => setShowScanner(false)}
+          onScan={handleBarcodeScan}
+        />
+
         {/* Signature Pad Modal */}
         <SignaturePad
           visible={showSignature}
@@ -345,6 +397,55 @@ const styles = StyleSheet.create({
     color: '#64748b',
     marginBottom: 20,
   },
+  scanButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  scanIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    backgroundColor: '#1a365d',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  scanTextContainer: {
+    flex: 1,
+  },
+  scanButtonTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1a365d',
+  },
+  scanButtonSubtitle: {
+    fontSize: 13,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e2e8f0',
+  },
+  dividerText: {
+    marginHorizontal: 12,
+    color: '#94a3b8',
+    fontSize: 13,
+  },
   searchBox: {
     flexDirection: 'row',
     gap: 12,
@@ -362,11 +463,10 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    fontSize: 18,
+    fontSize: 16,
     color: '#1e293b',
     paddingVertical: 16,
-    fontWeight: '600',
-    letterSpacing: 1,
+    fontWeight: '500',
   },
   searchButton: {
     width: 56,
@@ -399,10 +499,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   trackingCode: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     color: '#1a365d',
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
   statusBadge: {
     flexDirection: 'row',
@@ -416,7 +516,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
-  divider: {
+  dividerFull: {
     height: 1,
     backgroundColor: '#e2e8f0',
     marginVertical: 16,
