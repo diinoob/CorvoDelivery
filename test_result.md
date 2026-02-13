@@ -405,6 +405,54 @@ backend:
         agent: "testing"
         comment: "✅ TESTED: GET /api/deliveries/match/{tracking_code} successfully matches deliveries by tracking code. Returns delivery data for manifest-created entries."
 
+  - task: "Delivery Assignment - List Entregadores"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented GET /api/entregadores to list all active entregadores with delivery statistics"
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: GET /api/entregadores returns active entregadores with pending and in-transit delivery counts. Admin-only access enforced."
+
+  - task: "Delivery Assignment - List Unassigned Deliveries"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented GET /api/deliveries/unassigned to list pending deliveries available for assignment"
+      - working: false
+        agent: "testing"
+        comment: "❌ ISSUE FOUND: Route conflict - /deliveries/{delivery_id} was intercepting /deliveries/unassigned path, causing 404 errors"
+      - working: true
+        agent: "testing"
+        comment: "✅ FIXED & TESTED: Moved unassigned route before generic delivery_id route in server.py. Now returns unassigned deliveries correctly. Admin-only access enforced."
+
+  - task: "Delivery Assignment - Assign Deliveries"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented POST /api/deliveries/assign to assign deliveries to specific entregador"
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: POST /api/deliveries/assign successfully assigns deliveries to entregador. Updates entregador_id and entregador_name fields. Admin-only access enforced. Verified assignment persistence."
+
 frontend:
   - task: "Login Screen with Google Auth"
     implemented: true
