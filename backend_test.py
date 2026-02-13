@@ -364,6 +364,7 @@ class CorvoAPITester:
         all_results.update(self.test_deliveries())
         all_results.update(self.test_dashboard_stats())
         all_results.update(self.test_reports())
+        all_results.update(self.test_manifests())
         
         # Print summary
         print("\n" + "="*60)
